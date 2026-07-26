@@ -30,7 +30,7 @@ const AOS_API = (() => {
   // TODO(backend): point this at your deployed Express API.
   // On Vercel, Express routes typically live under /api, so a relative path
   // works in both local dev (via a proxy) and production.
-  const BASE_URL = '/api';
+  const BASE_URL = 'https://aos-backend-nine.vercel.app/api';
 
   /* ---------------------------------------------------------------------
    * Low-level request helper — all real implementations should route
@@ -84,11 +84,11 @@ const AOS_API = (() => {
    *            progress, health, client_id, created_at, updated_at)
    * ===================================================================== */
   const projects = {
-    list: (filters) => notImplemented('projects.list'), // TODO: return request('/projects', { params: filters })
-    get: (projectId) => notImplemented('projects.get'), // TODO: return request(`/projects/${projectId}`)
-    create: (payload) => notImplemented('projects.create'), // TODO: return request('/projects', { method:'POST', body: payload })
-    update: (projectId, payload) => notImplemented('projects.update'), // TODO: return request(`/projects/${projectId}`, { method:'PUT', body: payload })
-    remove: (projectId) => notImplemented('projects.remove') // TODO: return request(`/projects/${projectId}`, { method:'DELETE' })
+    list: (filters) => request('/projects', { params: filters })
+    get: (projectId) => request(`/projects/${projectId}`)
+    create: (payload) => request('/projects', { method:'POST', body: payload })
+    update: (projectId, payload) => request(`/projects/${projectId}`, { method:'PUT', body: payload })
+    remove: (projectId) => request(`/projects/${projectId}`, { method:'DELETE' })
   };
 
   /* =======================================================================
@@ -99,11 +99,11 @@ const AOS_API = (() => {
    *            due_date, assignee_id, assigned_by_id, team_id)
    * ===================================================================== */
   const tasks = {
-    listForProject: (projectId) => notImplemented('tasks.listForProject'), // TODO: return request(`/projects/${projectId}/tasks`)
-    listForUser: (userId, range) => notImplemented('tasks.listForUser'), // TODO: return request('/tasks', { params: { userId, range } })
-    create: (projectId, payload) => notImplemented('tasks.create'), // TODO: return request(`/projects/${projectId}/tasks`, { method:'POST', body: payload })
-    update: (taskId, payload) => notImplemented('tasks.update'), // TODO: return request(`/tasks/${taskId}`, { method:'PUT', body: payload })
-    remove: (taskId) => notImplemented('tasks.remove') // TODO: return request(`/tasks/${taskId}`, { method:'DELETE' })
+    listForProject: (projectId) => request(`/projects/${projectId}/tasks`)
+    listForUser: (userId, range) => request('/tasks', { params: { userId, range } })
+    create: (projectId, payload) => request(`/projects/${projectId}/tasks`, { method:'POST', body: payload })
+    update: (taskId, payload) => request(`/tasks/${taskId}`, { method:'PUT', body: payload })
+    remove: (taskId) => request(`/tasks/${taskId}`, { method:'DELETE' })
   };
 
   /* =======================================================================
@@ -112,8 +112,8 @@ const AOS_API = (() => {
    *            PUT /api/approvals/:id
    * ===================================================================== */
   const approvals = {
-    listForProject: (projectId) => notImplemented('approvals.listForProject'), // TODO
-    decide: (approvalId, decision) => notImplemented('approvals.decide') // decision: 'approved' | 'changes_requested' | 'rejected'
+    listForProject: (projectId) => request('/approvals', { params: { projectId } }),
+    decide: (approvalId, decision) => request(`/approvals/${approvalId}`, { method:'PUT', body: { status: decision } })
   };
 
   /* =======================================================================
@@ -124,10 +124,9 @@ const AOS_API = (() => {
    *            visible_to_client, created_at)
    * ===================================================================== */
   const comments = {
-    listForProject: (projectId) => notImplemented('comments.listForProject'), // TODO
-    create: (projectId, payload) => notImplemented('comments.create'), // payload: { body, visibleToClient }
-    remove: (commentId) => notImplemented('comments.remove')
-  };
+    listForProject: (projectId) => request('/comments', { params: { projectId } }),
+    create: (projectId, payload) => request('/comments', { method:'POST', body: { ...payload, project_id: projectId } }),
+    remove: (commentId) => notImplemented('comments.remove')  };
 
   /* =======================================================================
    *  MEMBERS / DIRECTORY / TEAMS  (Members screen)
@@ -135,12 +134,12 @@ const AOS_API = (() => {
    *  Supabase: `members` table, `teams` table, `team_members` join table
    * ===================================================================== */
   const members = {
-    listDirectory: () => notImplemented('members.listDirectory'), // TODO: return request('/members')
-    listTeams: () => notImplemented('members.listTeams'), // TODO: return request('/teams')
-    getTeam: (teamId) => notImplemented('members.getTeam'), // TODO: return request(`/teams/${teamId}`)
-    addToTeam: (teamId, memberPayload) => notImplemented('members.addToTeam'), // TODO
-    removeFromTeam: (teamId, memberId) => notImplemented('members.removeFromTeam'), // TODO
-    invite: (payload) => notImplemented('members.invite') // payload: { name, email, teamId, role }
+    listDirectory: () => request('/members'),
+    listTeams: () => request('/teams'),
+    getTeam: (teamId) => notImplemented('members.getTeam'),
+    addToTeam: (teamId, memberPayload) => notImplemented('members.addToTeam'),
+    removeFromTeam: (teamId, memberId) => notImplemented('members.removeFromTeam'),
+    invite: (payload) => request('/members', { method:'POST', body: payload })
   };
 
   /* =======================================================================
