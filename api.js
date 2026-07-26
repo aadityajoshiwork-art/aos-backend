@@ -84,10 +84,10 @@ const AOS_API = (() => {
    *            progress, health, client_id, created_at, updated_at)
    * ===================================================================== */
   const projects = {
-    list: (filters) => request('/projects', { params: filters })
-    get: (projectId) => request(`/projects/${projectId}`)
-    create: (payload) => request('/projects', { method:'POST', body: payload })
-    update: (projectId, payload) => request(`/projects/${projectId}`, { method:'PUT', body: payload })
+    list: (filters) => request('/projects', { params: filters }),
+    get: (projectId) => request(`/projects/${projectId}`),
+    create: (payload) => request('/projects', { method:'POST', body: payload }),
+    update: (projectId, payload) => request(`/projects/${projectId}`, { method:'PUT', body: payload }),
     remove: (projectId) => request(`/projects/${projectId}`, { method:'DELETE' })
   };
 
@@ -99,10 +99,10 @@ const AOS_API = (() => {
    *            due_date, assignee_id, assigned_by_id, team_id)
    * ===================================================================== */
   const tasks = {
-    listForProject: (projectId) => request(`/projects/${projectId}/tasks`)
-    listForUser: (userId, range) => request('/tasks', { params: { userId, range } })
-    create: (projectId, payload) => request(`/projects/${projectId}/tasks`, { method:'POST', body: payload })
-    update: (taskId, payload) => request(`/tasks/${taskId}`, { method:'PUT', body: payload })
+    listForProject: (projectId) => request(`/projects/${projectId}/tasks`),
+    listForUser: (userId, range) => request('/tasks', { params: { userId, range } }),
+    create: (projectId, payload) => request(`/projects/${projectId}/tasks`, { method:'POST', body: payload }),
+    update: (taskId, payload) => request(`/tasks/${taskId}`, { method:'PUT', body: payload }),
     remove: (taskId) => request(`/tasks/${taskId}`, { method:'DELETE' })
   };
 
