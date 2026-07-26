@@ -1,0 +1,2553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AOS — Agency Operating System (Preview)</title>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.446.0/dist/umd/lucide.min.js"></script>
+<!-- BACKEND INTEGRATION: centralized API layer. All fetch()/Express/Supabase/Graph
+     calls live here — the app script below never talks to the network directly. -->
+<script src="api.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FFFFFF; --surface: #F7F7F8; --border: #E7E7E9;
+    --text-primary: #17181B; --text-secondary: #6B6E76;
+    --accent: #C8102E; --accent-contrast: #FFFFFF; --charcoal: #2A2C30;
+    --success: #1A8654; --warning: #B7791F; --danger: #C8102E;
+    --success-bg:#E7F6EE; --warning-bg:#FBF1DE; --danger-bg:#FBE6E9;
+    --rugged-rail: linear-gradient(165deg, #23252A 0%, #2A2C30 38%, #1B1C1F 72%, #101113 100%);
+    --rugged-card: linear-gradient(155deg, #FFFFFF 0%, #FAFAF9 55%, #F3F2F0 100%);
+    --rugged-hero: radial-gradient(120% 140% at 0% 0%, rgba(200,16,46,.10), transparent 55%), linear-gradient(160deg, #F7F7F8 0%, #FFFFFF 55%, #F1F1F0 100%);
+  }
+  .dark {
+    --bg: #0E0F11; --surface: #17181B; --border: #26272B;
+    --text-primary: #F2F2F3; --text-secondary: #9A9CA3;
+    --accent: #E11D3C; --accent-contrast: #FFFFFF;
+    --success: #34C77E; --warning: #E0A63B; --danger: #E11D3C;
+    --success-bg:#12291D; --warning-bg:#2B2210; --danger-bg:#2C1417;
+    --rugged-rail: linear-gradient(165deg, #17181B 0%, #0E0F11 60%, #08090A 100%);
+    --rugged-card: linear-gradient(155deg, #1A1B1E 0%, #17181B 55%, #131417 100%);
+    --rugged-hero: radial-gradient(120% 140% at 0% 0%, rgba(225,29,60,.16), transparent 55%), linear-gradient(160deg, #0E0F11 0%, #17181B 55%, #0A0B0C 100%);
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; font-family:'Inter',system-ui,sans-serif; background:var(--rugged-hero); color:var(--text-primary); font-size:14px; line-height:1.5;
+    background-attachment: fixed;
+  }
+  .app { display:flex; min-height:100vh; background:transparent; }
+  /* Rail nav */
+  .rail { width:224px; flex-shrink:0; border-right:1px solid var(--border); background:var(--rugged-rail); padding:12px; display:flex; flex-direction:column; gap:2px; box-shadow: inset -1px 0 0 rgba(255,255,255,.03), 4px 0 24px rgba(0,0,0,.18); overflow-y:auto; }
+  .rail-brand { padding:10px 10px 18px; border-bottom:1px solid rgba(255,255,255,.08); margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+  .rail-brand .brand-main { font-family:'Oswald',sans-serif; font-weight:700; font-size:19px; letter-spacing:.3px; text-transform:uppercase; color:#fff; line-height:1.25; }
+  .rail-brand .brand-main .x { color:var(--accent); padding:0 4px; font-weight:700; }
+  .rail-brand .brand-sub { font-size:11px; color:#9A9CA3; text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+  .rail-close { display:none; background:transparent; border:none; color:#DADBDE; cursor:pointer; padding:4px; }
+  .nav-item { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; cursor:pointer; color:#DADBDE; transition:background .12s; }
+  .nav-item:hover { background:rgba(255,255,255,.06); }
+  .nav-item.active { background:linear-gradient(90deg, var(--accent), #A50E26); color:var(--accent-contrast); box-shadow:0 2px 10px rgba(200,16,46,.35); }
+  .nav-item svg { width:16px; height:16px; flex-shrink:0; }
+  .nav-caret { margin-left:auto; width:13px !important; height:13px !important; transition:transform .15s; opacity:.7; }
+  .nav-caret.open { transform:rotate(90deg); }
+  .nav-sub { display:none; flex-direction:column; gap:3px; padding-left:14px; margin:4px 0 6px; border-left:1px solid rgba(255,255,255,.1); }
+  .nav-sub.open { display:flex; }
+  .nav-sub-item { display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:7px; cursor:pointer; color:#B9BBC1; font-size:12.5px; line-height:1.3; }
+  .nav-sub-item:hover { background:rgba(255,255,255,.06); color:#fff; }
+  .nav-sub-item.active { background:rgba(200,16,46,.22); color:#fff; font-weight:500; }
+  .nav-sub-item svg { width:13px; height:13px; opacity:.85; }
+  .rail-scrim { display:none; }
+  /* Main */
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar { height:64px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 24px; flex-shrink:0; background:linear-gradient(90deg, rgba(200,16,46,.05), transparent 40%, rgba(42,44,48,.04)); backdrop-filter:saturate(1.1); gap:12px; }
+  .hamburger-btn { display:none; border:none; background:transparent; cursor:pointer; color:var(--text-primary); padding:6px; }
+  .greeting-wrap { display:flex; flex-direction:column; min-width:0; }
+  .greeting-wrap .greet-main { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .greeting-wrap .greet-sub { font-size:11px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .clock-chip { display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:999px; padding:6px 14px; background:var(--rugged-card); font-variant-numeric:tabular-nums; font-weight:600; font-size:13px; box-shadow:inset 0 1px 0 rgba(255,255,255,.4); }
+  .dark .clock-chip { box-shadow:inset 0 1px 0 rgba(255,255,255,.04); }
+  .clock-chip .clock-date { font-weight:400; color:var(--text-secondary); font-size:11px; border-left:1px solid var(--border); padding-left:8px; margin-left:2px; }
+  .search-btn { display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:6px 12px; color:var(--text-secondary); background:transparent; cursor:pointer; font-size:13px; font-family:inherit; }
+  kbd { border:1px solid var(--border); border-radius:4px; padding:0 4px; font-size:10px; margin-left:8px; }
+  .avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(155deg,var(--charcoal),#101113); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500; box-shadow:0 0 0 2px rgba(200,16,46,.25); flex-shrink:0; }
+  .topbar-right { display:flex; align-items:center; gap:12px; flex-shrink:0; }
+  .icon-btn { position:relative; border:none; background:transparent; border-radius:50%; padding:8px; cursor:pointer; color:var(--text-secondary); display:flex; }
+  .icon-btn:hover { background:var(--surface); }
+  .dot { position:absolute; top:6px; right:6px; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+  .content { flex:1; overflow-y:auto; }
+  .page { max-width:1100px; margin:0 auto; padding:32px 24px; }
+  .role-select { border:1px solid var(--border); border-radius:999px; padding:5px 10px; font-size:11px; background:var(--surface); color:var(--text-secondary); font-family:inherit; cursor:pointer; }
+  /* Cards / KPIs */
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .card { border:1px solid var(--border); border-radius:12px; background:var(--rugged-card); padding:20px; box-shadow:0 1px 2px rgba(0,0,0,.03), inset 0 1px 0 rgba(255,255,255,.5); }
+  .dark .card { box-shadow:0 1px 2px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.03); }
+  .kpi-card { cursor:pointer; transition:transform .12s, box-shadow .12s; }
+  .kpi-card:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.12); border-color:var(--accent); }
+  .kpi-label { display:flex; justify-content:space-between; align-items:center; color:var(--text-secondary); font-size:13px; margin-bottom:12px; }
+  .kpi-value { font-size:24px; font-weight:600; }
+  .kpi-hint { font-size:11px; color:var(--text-secondary); margin-top:6px; display:flex; align-items:center; gap:4px; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+  .section-title { font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:12px; }
+  h1.page-title { font-family:'Oswald',sans-serif; font-size:21px; font-weight:600; letter-spacing:.2px; text-transform:uppercase; margin:0 0 4px; }
+  .subtle { color:var(--text-secondary); font-size:13px; }
+  /* Status pill */
+  .pill { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:500; white-space:nowrap; }
+  .pill-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .pulse { animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  /* Table-ish rows */
+  .row-list { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .row { display:grid; grid-template-columns:1fr 130px 110px 110px 120px; gap:16px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; }
+  .row:last-child { border-bottom:none; }
+  .row:hover { background:var(--surface); }
+  .row-head { background:var(--surface); font-size:12px; font-weight:500; color:var(--text-secondary); cursor:default; }
+  .row-head:hover { background:var(--surface); }
+  .proj-name { font-weight:500; }
+  /* Buttons */
+  .btn { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-outline { background:transparent; border:1px solid var(--border); color:var(--text-primary); }
+  .btn-outline:hover { background:var(--surface); }
+  .btn svg { width:14px; height:14px; }
+  .btn-sm { padding:6px 10px; font-size:12px; }
+  /* Tabs */
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); padding:0 24px; overflow-x:auto; }
+  .tab { padding:10px 12px; font-size:13px; color:var(--text-secondary); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
+  .tab.active { color:var(--text-primary); font-weight:500; border-bottom-color:var(--accent); }
+  /* ===== Async state placeholders (loading / empty / error) ===== */
+  .state-box { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:32px 16px; color:var(--text-secondary); font-size:13px; text-align:center; }
+  .state-box.state-error { color:var(--danger); }
+  .state-spinner { width:18px; height:18px; border-radius:50%; border:2px solid var(--border); border-top-color:var(--accent); animation:spin .8s linear infinite; }
+  .state-retry { margin-top:4px; }
+  .empty { padding:16px; color:var(--text-secondary); font-size:13px; text-align:center; }
+  /* ===== Admin CMS ===== */
+  .admin-table-wrap { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .admin-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .admin-table th { text-align:left; background:var(--surface); color:var(--text-secondary); font-weight:500; padding:10px 14px; font-size:12px; }
+  .admin-table td { padding:10px 14px; border-top:1px solid var(--border); }
+  .admin-table tr:hover td { background:var(--surface); }
+  .admin-row-actions { display:flex; gap:6px; justify-content:flex-end; }
+  .admin-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  /* Kanban */
+  .board { display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; }
+  .col { width:250px; flex-shrink:0; border:1px solid var(--border); border-radius:12px; padding:8px; }
+  .col-head { display:flex; justify-content:space-between; padding:4px 6px 10px; font-size:12px; color:var(--text-secondary); font-weight:500; }
+  .task-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; cursor:pointer; }
+  .task-card:hover { border-color:var(--accent); }
+  .task-priority { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-secondary); text-transform:capitalize; margin-bottom:6px; }
+  .task-priority-dot { width:6px; height:6px; border-radius:50%; }
+  .task-title { font-weight:500; margin-bottom:8px; }
+  .task-foot { display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); }
+  .mini-avatar { width:18px; height:18px; border-radius:50%; background:var(--charcoal); color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  /* Comments */
+  .comment { padding:12px; border-radius:8px; margin-bottom:8px; }
+  .comment-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .badge-internal { display:inline-flex; align-items:center; gap:4px; background:var(--surface); border-radius:999px; padding:2px 8px; font-size:10px; color:var(--text-secondary); }
+  .composer { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:16px; }
+  .composer textarea { width:100%; border:none; resize:none; font-family:inherit; font-size:13px; background:transparent; color:var(--text-primary); outline:none; }
+  .composer-foot { display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+  .toggle-vis { display:flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  .toggle-vis.internal { background:var(--charcoal); color:#fff; }
+  .toggle-vis.client { background:var(--surface); color:var(--text-secondary); }
+  /* Empty state */
+  .empty { display:flex; flex-direction:column; align-items:center; gap:6px; border:1px dashed var(--border); border-radius:12px; padding:48px; text-align:center; color:var(--text-secondary); }
+  /* Command palette */
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-start; justify-content:center; padding-top:15vh; z-index:50; }
+  .overlay.show { display:flex; }
+  .palette { width:100%; max-width:480px; background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.2); }
+  .palette input { width:100%; border:none; border-bottom:1px solid var(--border); padding:14px 16px; font-size:14px; outline:none; font-family:inherit; background:transparent; color:var(--text-primary); }
+  .palette-item { padding:10px 16px; font-size:13px; cursor:pointer; }
+  .palette-item:hover { background:var(--surface); }
+  .palette-group { padding:8px 16px 4px; font-size:11px; color:var(--text-secondary); }
+  /* Notif dropdown */
+  .notif-panel { position:absolute; right:24px; top:56px; width:320px; max-width:90vw; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.15); display:none; z-index:40; }
+  .notif-panel.show { display:block; }
+  .notif-head { display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid var(--border); font-weight:500; font-size:13px; }
+  .notif-item { padding:12px; border-bottom:1px solid var(--border); font-size:13px; }
+  .notif-item:last-child { border-bottom:none; }
+  .theme-toggle { border:1px solid var(--border); border-radius:999px; padding:6px 10px; background:transparent; cursor:pointer; color:var(--text-secondary); display:flex; align-items:center; gap:6px; font-size:12px; font-family:inherit; }
+  .screen { display:none; }
+  .screen.show { display:block; }
+
+  /* Modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(10,10,11,.55); display:none; align-items:center; justify-content:center; z-index:60; padding:20px; }
+  .modal-overlay.show { display:flex; }
+  .modal { width:100%; max-width:520px; max-height:86vh; overflow-y:auto; background:var(--rugged-card); border:1px solid var(--border); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  .modal.modal-lg { max-width:680px; }
+  .modal-head { display:flex; justify-content:space-between; align-items:center; padding:18px 20px; border-bottom:1px solid var(--border); gap:10px; }
+  .modal-head h2 { font-size:15px; margin:0; font-weight:600; }
+  .modal-close { border:none; background:transparent; cursor:pointer; color:var(--text-secondary); padding:4px; border-radius:6px; flex-shrink:0; }
+  .modal-close:hover { background:var(--surface); }
+  .modal-body { padding:20px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:8px; padding:16px 20px; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:12px; color:var(--text-secondary); margin-bottom:5px; font-weight:500; }
+  .field input, .field select, .field textarea { width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:13px; background:var(--bg); color:var(--text-primary); outline:none; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color:var(--accent); }
+  .sync-note { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary); background:var(--surface); border-radius:8px; padding:10px 12px; margin-top:6px; }
+  .sync-note svg { width:14px; height:14px; flex-shrink:0; color:var(--success); }
+  .sync-option { display:flex; gap:12px; border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; }
+  .sync-option-icon { width:34px; height:34px; border-radius:9px; background:var(--surface); color:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .sync-option-icon svg { width:16px; height:16px; }
+  .sync-option-title { font-weight:600; margin-bottom:3px; }
+
+  /* Hover popover for tasks */
+  .task-popover { position:fixed; z-index:70; width:260px; background:var(--rugged-card); border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.25); padding:14px; display:none; pointer-events:none; }
+  .task-popover.show { display:block; }
+  .task-popover .tp-title { font-weight:600; font-size:13px; margin-bottom:8px; }
+  .task-popover .tp-row { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-top:1px solid var(--border); }
+  .task-popover .tp-row:first-of-type { border-top:none; }
+  .task-popover .tp-label { color:var(--text-secondary); }
+
+  /* Vertical task list */
+  .task-groups { display:flex; flex-direction:column; gap:22px; }
+  .task-group-head { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; margin-bottom:10px; }
+  .task-group-count { background:var(--surface); border-radius:999px; padding:1px 8px; font-size:11px; color:var(--text-secondary); font-weight:500; }
+  .task-tile-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:10px; }
+
+  /* Bento box (Members / Teams) */
+  .bento { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .bento-card { border:1px solid var(--border); border-radius:14px; background:var(--rugged-card); padding:18px; cursor:pointer; transition:transform .12s, box-shadow .12s; }
+  .bento-card:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.12); border-color:var(--accent); }
+  .bento-card .dept-icon { width:36px; height:36px; border-radius:9px; background:linear-gradient(155deg,var(--accent),#8C0B21); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; margin-bottom:12px; }
+  .bento-card .dept-name { font-weight:600; margin-bottom:2px; }
+  .admin-badge { display:inline-flex; align-items:center; gap:4px; background:var(--charcoal); color:#fff; border-radius:999px; padding:2px 9px; font-size:10px; font-weight:600; letter-spacing:.3px; white-space:nowrap; }
+  .member-row { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-top:1px solid var(--border); gap:10px; }
+  .member-row:first-child { border-top:none; }
+
+  /* Status pills - extended vocabulary */
+  .pill-progress .pill-dot { background:#3B82F6; }
+  .pill-approved .pill-dot { background:var(--success); }
+  .pill-live .pill-dot { background:var(--accent); }
+  .pill-ontrack .pill-dot { background:var(--success); }
+  .pill-delayed .pill-dot { background:var(--danger); }
+  .pill-onhold .pill-dot { background:var(--warning); }
+  .pill-tbd .pill-dot { background:var(--text-secondary); }
+  .pill-completed .pill-dot { background:var(--success); }
+  .pill-awaiting .pill-dot { background:var(--warning); }
+  .pill-active .pill-dot { background:#3B82F6; }
+
+  .due-today { color:var(--danger); font-weight:600; }
+  .icon-positive { color:var(--success) !important; }
+  .icon-danger { color:var(--danger) !important; }
+  .icon-caution { color:var(--warning) !important; }
+
+  .clickable-row { cursor:pointer; border-radius:8px; transition:background .12s; }
+  .clickable-row:hover { background:var(--surface); }
+
+  /* ===== Home: interactive task widget ===== */
+  .task-mini-list { display:flex; flex-direction:column; gap:0; }
+  .task-mini-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 4px; border-top:1px solid var(--border); cursor:pointer; }
+  .task-mini-item:first-child { border-top:none; }
+  .task-mini-item:hover { background:var(--surface); border-radius:8px; }
+  .task-mini-left { display:flex; align-items:center; gap:8px; min-width:0; }
+  .task-mini-title { font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .task-mini-meta { font-size:11px; color:var(--text-secondary); }
+  .home-tasks-tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .home-tasks-tab { border:1px solid var(--border); border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer; color:var(--text-secondary); background:transparent; font-family:inherit; }
+  .home-tasks-tab.active { background:var(--charcoal); color:#fff; border-color:var(--charcoal); }
+
+  /* ===== Home: Upcoming Go-Lives horizontal tile ===== */
+  .upcoming-list { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .upcoming-tile { display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:10px; padding:11px 14px; cursor:pointer; transition:border-color .12s, transform .12s; background:var(--rugged-card); }
+  .upcoming-tile:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .upcoming-tile .ut-icon { width:34px; height:34px; border-radius:9px; background:linear-gradient(155deg,var(--accent),#8C0B21); color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .upcoming-tile .ut-icon svg { width:16px; height:16px; }
+  .upcoming-tile .ut-main { flex:1; min-width:0; }
+  .upcoming-tile .ut-name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .upcoming-tile .ut-meta { font-size:11px; color:var(--text-secondary); margin-top:1px; }
+  .upcoming-tile .ut-countdown { flex-shrink:0; text-align:right; }
+  .upcoming-tile .ut-countdown .ut-t { font-family:'Oswald',sans-serif; font-weight:600; font-size:15px; }
+  .upcoming-tile .ut-countdown .ut-t.soon { color:var(--danger); }
+  .upcoming-tile .ut-countdown .ut-t.ok { color:var(--success); }
+  .upcoming-tile .ut-countdown .ut-date { font-size:10px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.3px; }
+
+  /* ===== Projects: category hub + horizontal preview cards ===== */
+  .cat-hub-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:8px; }
+  .cat-hub-card { border:1px solid var(--border); border-radius:14px; background:var(--rugged-card); padding:18px; cursor:pointer; transition:transform .12s, box-shadow .12s; border-left:4px solid var(--accent); }
+  .cat-hub-card:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.12); }
+  .cat-hub-card .cat-count { font-size:26px; font-weight:700; font-family:'Oswald',sans-serif; }
+  .cat-hub-card .cat-name { font-weight:600; margin-top:2px; }
+
+  .proj-filter-bar { display:flex; align-items:center; gap:10px; margin:14px 0 16px; flex-wrap:wrap; }
+  .proj-filter-bar select { border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-family:inherit; font-size:12.5px; background:var(--bg); color:var(--text-primary); }
+
+  /* ===== Projects: Filter by dropdown ===== */
+  .filter-by-wrap { position:relative; display:flex; align-items:center; margin:14px 0 16px; }
+  .filter-panel { position:absolute; top:calc(100% + 8px); left:0; width:260px; background:var(--rugged-card); border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.2); padding:14px; display:none; z-index:40; }
+  .filter-panel.show { display:block; }
+  .filter-panel-section { margin-bottom:14px; }
+  .filter-panel-section:last-of-type { margin-bottom:12px; }
+  .filter-panel-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary); margin-bottom:6px; }
+  .filter-panel-section select { width:100%; border:1px solid var(--border); border-radius:8px; padding:7px 9px; font-family:inherit; font-size:12.5px; background:var(--bg); color:var(--text-primary); }
+  .sort-option { display:flex; align-items:center; justify-content:space-between; width:100%; border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-family:inherit; font-size:12.5px; background:var(--bg); color:var(--text-primary); cursor:pointer; margin-bottom:6px; }
+  .sort-option:last-child { margin-bottom:0; }
+  .sort-option .sort-arrow { width:12px; height:12px; opacity:0; transition:transform .15s, opacity .15s; }
+  .sort-option.active { border-color:var(--accent); color:var(--accent); font-weight:600; }
+  .sort-option.active .sort-arrow { opacity:1; }
+  .sort-option.active.desc .sort-arrow { transform:rotate(180deg); }
+
+  .proj-h-card { display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:12px; background:var(--rugged-card); padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:border-color .12s, transform .12s; }
+  .proj-h-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .proj-h-name { font-weight:600; flex:1 1 220px; min-width:140px; }
+  .proj-h-col { flex:0 0 auto; min-width:120px; }
+  .proj-h-label { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary); margin-bottom:2px; }
+  .proj-h-value { font-size:13px; }
+  .proj-h-avatars { display:flex; }
+  .proj-h-avatars .mini-avatar { width:24px; height:24px; font-size:10px; margin-left:-6px; border:2px solid var(--bg); }
+  .proj-h-avatars .mini-avatar:first-child { margin-left:0; }
+
+  /* ===== Project detail v2 (reference-inspired sectioned layout) ===== */
+  .pd-hero { border-radius:14px; padding:18px 20px; margin-bottom:18px; background:var(--rugged-card); border:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .pd-section { border:1px solid var(--border); border-radius:14px; background:var(--rugged-card); padding:18px 20px; margin-bottom:16px; }
+  .pd-section-head { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary); margin-bottom:14px; }
+  .pd-section-head .bar { width:4px; height:14px; border-radius:2px; background:var(--accent); display:inline-block; }
+  .pd-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px 24px; }
+  .pd-field-label { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.3px; margin-bottom:4px; }
+  .pd-field-value { font-size:14px; font-weight:500; }
+  .progress-track { background:var(--border); border-radius:99px; height:9px; overflow:hidden; margin:8px 0 6px; }
+  .progress-fill { height:100%; border-radius:99px; transition:width .2s; }
+  .progress-fill.low { background:#E4737E; }
+  .progress-fill.mid { background:#F0A94E; }
+  .progress-fill.high { background:#4CAF7D; }
+  .stage-chip { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:3px 10px; font-size:11px; font-weight:600; }
+  .stage-chip.low { background:var(--danger-bg); color:var(--danger); }
+  .stage-chip.mid { background:var(--warning-bg); color:var(--warning); }
+  .stage-chip.high { background:var(--success-bg); color:var(--success); }
+
+  /* ===== Members: directory + team drill ===== */
+  .member-modal-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .member-modal-table th { text-align:left; color:var(--text-secondary); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.3px; padding:6px 8px; border-bottom:1px solid var(--border); }
+  .member-modal-table td { padding:8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .member-modal-table tr:last-child td { border-bottom:none; }
+
+  /* ===== Finance ===== */
+  .finance-row { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:12px; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border); }
+  .finance-row:last-child { border-bottom:none; }
+  .finance-row-head { background:var(--surface); font-size:11px; text-transform:uppercase; letter-spacing:.3px; font-weight:600; color:var(--text-secondary); }
+  .finance-select { width:100%; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:12px; font-family:inherit; background:var(--bg); color:var(--text-primary); }
+  .finance-select.initiated { color:var(--warning); border-color:var(--warning); }
+  .finance-select.closed { color:var(--success); border-color:var(--success); }
+  .finance-cat-title { margin-top:26px; text-transform:uppercase; letter-spacing:.4px; font-size:12px; color:var(--text-secondary); font-weight:600; }
+
+  /* ===== Reports: org-wide Work Ownership stacked bar ===== */
+  .ownership-stack { display:flex; width:100%; height:16px; border-radius:999px; overflow:hidden; border:1px solid var(--border); }
+  .ownership-seg { height:100%; }
+  .ownership-legend { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:10px; font-size:11px; color:var(--text-secondary); }
+  .ownership-legend .oleg-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+
+  /* ===== Archived Posts: sub-section tabs ===== */
+  .archive-tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); overflow-x:auto; }
+  .archive-tab { padding:10px 12px; font-size:13px; color:var(--text-secondary); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
+  .archive-tab.active { color:var(--text-primary); font-weight:500; border-bottom-color:var(--accent); }
+
+  /* ===== Members: directory sort + team grouping ===== */
+  .dir-sort-group { display:flex; align-items:center; gap:6px; }
+  .dir-sort-btn { border:1px solid var(--border); border-radius:999px; padding:5px 12px; font-size:12px; font-family:inherit; background:var(--bg); color:var(--text-secondary); cursor:pointer; }
+  .dir-sort-btn.active { background:var(--charcoal); color:#fff; border-color:var(--charcoal); }
+  .dir-team-header { padding:10px 14px 6px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary); background:var(--surface); }
+
+  /* ===== Navigation trail: interactive gradient path ===== */
+  .nav-trail-bar { display:flex; align-items:center; gap:12px; padding:10px 28px; background:var(--bg); border-bottom:1px solid var(--border); overflow-x:auto; white-space:nowrap; scrollbar-width:thin; }
+  .nav-trail-bar::-webkit-scrollbar { height:4px; }
+  .trail-back { flex-shrink:0; width:30px; height:30px; border-radius:50%; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; background:linear-gradient(135deg, var(--accent), #ff8a5c); box-shadow:0 2px 8px rgba(200,16,46,.3); transition:transform .15s, opacity .15s, box-shadow .15s; }
+  .trail-back:hover:not(:disabled) { transform:scale(1.1) rotate(-8deg); box-shadow:0 4px 12px rgba(200,16,46,.45); }
+  .trail-back:disabled { opacity:.25; cursor:default; background:var(--border); box-shadow:none; }
+  .trail-back svg { width:14px; height:14px; }
+  .trail-path { display:flex; align-items:center; gap:9px; }
+  .trail-pill { flex-shrink:0; border:none; border-radius:999px; padding:6px 15px; font-size:12px; font-family:inherit; font-weight:500; cursor:pointer; color:#fff; background:linear-gradient(120deg, hsl(calc(352 - var(--i,0)*16), 72%, 46%), hsl(calc(352 - var(--i,0)*16 + 34), 68%, 58%)); box-shadow:0 2px 6px rgba(0,0,0,.14); transition:transform .15s, box-shadow .15s, opacity .15s; opacity:.88; }
+  .trail-pill:hover:not(.current) { transform:translateY(-2px); box-shadow:0 5px 12px rgba(0,0,0,.2); opacity:1; }
+  .trail-pill.current { cursor:default; opacity:1; background:linear-gradient(120deg, var(--accent), #ff8a5c, var(--accent)); background-size:200% 200%; animation:trailFlow 3.5s ease infinite; box-shadow:0 0 0 3px rgba(200,16,46,.18), 0 3px 10px rgba(200,16,46,.35); font-weight:600; }
+  .trail-arrow { flex-shrink:0; color:var(--text-secondary); opacity:.5; font-size:13px; }
+  @keyframes trailFlow { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+  @media (max-width:700px) {
+    .nav-trail-bar { padding:8px 16px; gap:8px; }
+    .trail-pill { padding:5px 12px; font-size:11px; }
+  }
+
+  /* ================= RESPONSIVE ================= */
+  @media (max-width: 1080px) {
+    .kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .cat-hub-grid { grid-template-columns:repeat(2,1fr); }
+    .bento { grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width: 900px) {
+    .rail { position:fixed; top:0; left:0; height:100vh; z-index:90; transform:translateX(-100%); transition:transform .22s ease; box-shadow:8px 0 30px rgba(0,0,0,.35); }
+    .rail.open { transform:translateX(0); }
+    .rail-close { display:flex; }
+    .hamburger-btn { display:flex; }
+    .rail-scrim { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:85; }
+    .rail-scrim.show { display:block; }
+    .page { padding:20px 16px; }
+    .two-col { grid-template-columns:1fr; }
+    .pd-grid { grid-template-columns:1fr; }
+    .greeting-wrap .greet-sub { display:none; }
+  }
+  @media (max-width: 700px) {
+    .kpi-grid { grid-template-columns:repeat(2,1fr); gap:10px; }
+    .kpi-value { font-size:20px; }
+    .card { padding:14px; }
+    .cat-hub-grid { grid-template-columns:1fr; }
+    .bento { grid-template-columns:1fr; }
+    .row, .row-head { grid-template-columns:1fr; gap:6px; }
+    .row-head { display:none; }
+    .row { align-items:flex-start; }
+    .finance-row { grid-template-columns:1fr; gap:8px; }
+    .finance-row-head { display:none; }
+    .clock-chip .clock-date { display:none; }
+    .role-select { display:none; }
+    .search-btn span, .search-btn kbd { display:none; }
+    .theme-toggle-label { display:none; }
+    .theme-toggle { padding:8px; gap:0; }
+    .topbar { padding:0 12px; gap:8px; }
+    .proj-h-card { flex-direction:column; align-items:flex-start; gap:8px; }
+    .proj-h-name { flex-basis:auto; }
+    h1.page-title { font-size:18px; }
+    .modal-foot { justify-content:stretch; }
+    .modal-foot .btn { flex:1; justify-content:center; }
+    .role-select { font-size:10px; }
+  }
+  @media (max-width: 420px) {
+    .kpi-grid { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="rail-scrim" id="railScrim"></div>
+<div class="app">
+  <!-- RAIL NAV -->
+  <nav class="rail" id="rail">
+    <div class="rail-brand">
+      <div>
+        <div class="brand-main">22FT<span class="x">×</span>Royal Enfield</div>
+        <div class="brand-sub">Internal Dashboard</div>
+      </div>
+      <button class="rail-close" id="railCloseBtn"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+
+    <div class="nav-item active" data-screen="dashboard"><i data-lucide="layout-dashboard"></i>Home<i data-lucide="chevron-right" class="nav-caret" id="homeCaret"></i></div>
+    <div class="nav-sub" id="homeSub">
+      <div class="nav-sub-item" data-screen="mytasks"><i data-lucide="list-checks"></i>My Tasks</div>
+    </div>
+
+    <div class="nav-item" data-screen="projects-hub"><i data-lucide="folder-kanban"></i>Projects<i data-lucide="chevron-right" class="nav-caret open" id="projCaret"></i></div>
+    <div class="nav-sub open" id="projSub">
+      <div class="nav-sub-item" data-cat="Tech"><i data-lucide="cpu"></i>Tech Projects</div>
+      <div class="nav-sub-item" data-cat="NonTech"><i data-lucide="briefcase"></i>Non-Tech Projects</div>
+      <div class="nav-sub-item" data-cat="EGF"><i data-lucide="mountain"></i>EGF Projects</div>
+      <div class="nav-sub-item" data-cat="TCZ"><i data-lucide="route"></i>TCZ Driven Projects</div>
+      <div class="nav-sub-item" data-cat="Embitel"><i data-lucide="server"></i>Embitel Projects</div>
+    </div>
+
+    <div class="nav-item" data-screen="clients"><i data-lucide="users"></i>Members</div>
+    <div class="nav-item" data-screen="reports"><i data-lucide="bar-chart-3"></i>Reports</div>
+    <div class="nav-item" data-screen="finance"><i data-lucide="wallet"></i>Finance</div>
+    <div class="nav-item" data-screen="archives"><i data-lucide="archive"></i>Completed Projects</div>
+    <div class="nav-item" data-screen="portal"><i data-lucide="external-link"></i>Client Portal View</div>
+
+    <div class="nav-item" id="adminNavItem" style="display:none;"><i data-lucide="shield"></i>Admin CMS<i data-lucide="chevron-right" class="nav-caret" id="adminCaret"></i></div>
+    <div class="nav-sub" id="adminSub">
+      <div class="nav-sub-item" data-admin-tab="clients"><i data-lucide="building-2"></i>Clients</div>
+      <div class="nav-sub-item" data-admin-tab="agencies"><i data-lucide="briefcase"></i>Agencies</div>
+      <div class="nav-sub-item" data-admin-tab="thirdParties"><i data-lucide="handshake"></i>Third Parties</div>
+      <div class="nav-sub-item" data-admin-tab="brands"><i data-lucide="tag"></i>Brands</div>
+      <div class="nav-sub-item" data-admin-tab="teams"><i data-lucide="users"></i>Teams</div>
+      <div class="nav-sub-item" data-admin-tab="members"><i data-lucide="user"></i>Members</div>
+      <div class="nav-sub-item" data-admin-tab="roles"><i data-lucide="key-round"></i>Roles</div>
+      <div class="nav-sub-item" data-admin-tab="orgSettings"><i data-lucide="settings"></i>Organization Settings</div>
+      <div class="nav-sub-item" data-admin-tab="msTenantSettings"><i data-lucide="cloud"></i>Microsoft Tenant Settings</div>
+    </div>
+  </nav>
+
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <button class="hamburger-btn" id="hamburgerBtn"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+      <div class="greeting-wrap">
+        <span class="greet-main" id="greetText">Good morning, Aaditya</span>
+        <span class="greet-sub" id="greetSub">Signed in as aaditya.joshi@omc.com · Admin</span>
+      </div>
+      <div class="topbar-right">
+        <select class="role-select" id="roleSelect" title="Preview as role">
+          <option value="Admin">View as: Admin</option>
+          <option value="Project Manager">View as: Project Manager</option>
+          <option value="Member">View as: Member</option>
+        </select>
+        <div class="clock-chip" id="clockChip"><i data-lucide="clock-4" style="width:14px;height:14px;color:var(--accent);"></i><span id="clockTime">--:--</span><span class="clock-date" id="clockDate">—</span></div>
+        <button class="theme-toggle" id="themeToggle" title="Toggle dark mode"><i data-lucide="moon" style="width:13px;height:13px;"></i><span class="theme-toggle-label">Dark</span></button>
+        <button class="search-btn" id="openPalette"><i data-lucide="search" style="width:14px;height:14px;"></i><span>Search</span><kbd>⌘K</kbd></button>
+        <button class="icon-btn" id="bellBtn"><i data-lucide="bell" style="width:16px;height:16px;"></i><span class="dot"></span></button>
+        <div class="avatar">A</div>
+      </div>
+    </div>
+
+    <div class="nav-trail-bar" id="navTrailBar"></div>
+
+    <div class="content">
+
+      <!-- ============ HOME / DASHBOARD ============ -->
+      <div class="screen show" id="screen-dashboard">
+        <div class="page">
+          <div class="kpi-grid" id="homeKpiGrid"></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>My Tasks</span>
+                <span class="subtle" style="cursor:pointer;" data-action="navScreen" data-screen="mytasks">View all →</span>
+              </div>
+              <div class="home-tasks-tabs">
+                <button class="home-tasks-tab active" data-range="today" data-action="setHomeTaskRange" data-arg="today">Today</button>
+                <button class="home-tasks-tab" data-range="upcoming" data-action="setHomeTaskRange" data-arg="upcoming">Upcoming</button>
+              </div>
+              <!-- BACKEND: populated from AOS_API.tasks.listForUser(currentUserId, homeTaskRange) -->
+              <div class="task-mini-list" id="homeTaskList"></div>
+            </div>
+            <div class="card">
+              <div class="section-title">Recent Activity</div>
+              <!-- BACKEND: populated from AOS_API.notifications.list() / an activity-feed endpoint -->
+              <div id="recentActivityList"></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:24px;">
+            <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Upcoming Go-Lives</span>
+              <span class="subtle" style="cursor:pointer;" data-action="navScreen" data-screen="projects-hub">View all projects →</span>
+            </div>
+            <div class="upcoming-list" id="upcomingGoLiveList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ PROJECTS HUB ============ -->
+      <div class="screen" id="screen-projects-hub">
+        <div class="page">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:10px;">
+            <h1 class="page-title">Projects</h1>
+            <button class="btn btn-primary" data-action="openModal" data-arg="newProjectModal"><i data-lucide="plus"></i>New Project</button>
+          </div>
+          <p class="subtle" style="margin:0 0 18px;">Choose a category to see its live project sheet — every project name, Brand POC, go-live date and assignees at a glance.</p>
+          <div class="cat-hub-grid" id="catHubGrid"></div>
+        </div>
+      </div>
+
+      <!-- ============ PROJECT CATEGORY LIST ============ -->
+      <div class="screen" id="screen-project-category">
+        <div class="page">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px; flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" data-action="navScreen" data-screen="projects-hub"><i data-lucide="arrow-left"></i>All categories</button>
+            <h1 class="page-title" style="margin:0;" id="catTitle">Category</h1>
+          </div>
+          <p class="subtle" style="margin:6px 0 0;" id="catSubtitle"></p>
+          <div class="filter-by-wrap">
+            <button class="btn btn-outline btn-sm" id="filterByBtn" data-action="toggleFilterPanel"><i data-lucide="sliders-horizontal"></i>Filter by<i data-lucide="chevron-down" style="width:12px;height:12px;"></i></button>
+            <span class="subtle" id="activeFilterSummary" style="margin-left:10px;"></span>
+            <div class="filter-panel" id="filterPanel" data-action="stopPropagation">
+              <div class="filter-panel-section">
+                <div class="filter-panel-label">By Brand POC</div>
+                <select id="brandPocFilter" name="brandPocFilter" data-change-action="setCatBrandPocFilter"><option value="">All Brand POCs</option></select>
+              </div>
+              <div class="filter-panel-section">
+                <div class="filter-panel-label">Sort by</div>
+                <button type="button" class="sort-option" id="sortOpt-goLive" data-action="toggleCatSort" data-arg="goLive"><span>Go-live date</span><i data-lucide="arrow-down" class="sort-arrow"></i></button>
+                <button type="button" class="sort-option" id="sortOpt-initiation" data-action="toggleCatSort" data-arg="initiation"><span>Project start date</span><i data-lucide="arrow-down" class="sort-arrow"></i></button>
+              </div>
+              <div class="filter-panel-section">
+                <div class="filter-panel-label">By 22FT POC</div>
+                <select id="poc22ftFilter" name="poc22ftFilter" data-change-action="setCat22ftPocFilter"><option value="">All 22FT POCs</option></select>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" style="width:100%; justify-content:center;" data-action="clearCatFilters"><i data-lucide="x"></i>Clear filters</button>
+            </div>
+          </div>
+          <!-- BACKEND: populated from AOS_API.projects.list({ category, ...filters }) -->
+          <div id="catProjectList"></div>
+        </div>
+      </div>
+
+      <!-- ============ PROJECT DETAIL ============ -->
+      <div class="screen" id="screen-project-detail">
+        <div class="page" style="max-width:1000px; padding-top:20px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+            <button class="btn btn-outline btn-sm" data-action="backFromProjectDetail"><i data-lucide="arrow-left"></i>Back</button>
+          </div>
+          <div class="pd-hero">
+            <div>
+              <div class="subtle" id="pdCategoryLabel">Category</div>
+              <h1 class="page-title" id="pdName" style="margin:2px 0 0;">Project name</h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span class="pill" id="pdStagePill"><span class="pill-dot"></span>Kick-off</span>
+              <button class="btn btn-outline btn-sm" id="pdEditBtn" data-action="openEditProject" style="display:none;"><i data-lucide="pencil"></i>Edit project</button>
+            </div>
+          </div>
+
+          <div class="pd-section">
+            <div class="pd-section-head"><span class="bar"></span>Project Details</div>
+            <div class="pd-grid">
+              <div><div class="pd-field-label">Project initiation date</div><div class="pd-field-value" id="pdInit">—</div></div>
+              <div><div class="pd-field-label">Go-live date</div><div class="pd-field-value" id="pdGoLive">—</div></div>
+              <div><div class="pd-field-label">Project effort</div><div class="pd-field-value" id="pdEffort">—</div></div>
+              <div><div class="pd-field-label">Brand POC</div><div class="pd-field-value" id="pdPoc">—</div></div>
+            </div>
+          </div>
+
+          <div class="pd-section">
+            <div class="pd-section-head"><span class="bar"></span>Assignees</div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;" id="pdAssignees"></div>
+          </div>
+
+          <div class="pd-section">
+            <div class="pd-section-head"><span class="bar"></span>Progress</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <span class="stage-chip" id="pdStageChip">Kick-off</span>
+              <span class="subtle" id="pdProgressPct">0%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="pdProgressFill" style="width:0%;"></div></div>
+            <p class="subtle" style="margin:6px 0 0;">0–40% Kick-off · 41–80% UAT Submission · 81–100% Go-Live</p>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="tasksboard">Tasks</div>
+          <div class="tab" data-tab="approvals">Approvals</div>
+          <div class="tab" data-tab="comments">Comments</div>
+        </div>
+        <div class="page" style="max-width:900px;">
+          <div class="tabpane show" id="tab-tasksboard">
+            <!-- BACKEND: populated from AOS_API.tasks.listForProject(projectId), grouped by status -->
+            <div class="board" id="taskBoard" data-project-id="">
+              <div class="col" data-status="todo"><div class="col-head">To Do<span data-count-for="todo">0</span></div><div data-cards-for="todo"></div></div>
+              <div class="col" data-status="inprogress"><div class="col-head">In Progress<span data-count-for="inprogress">0</span></div><div data-cards-for="inprogress"></div></div>
+              <div class="col" data-status="inreview"><div class="col-head">In Review<span data-count-for="inreview">0</span></div><div data-cards-for="inreview"></div></div>
+              <div class="col" data-status="done"><div class="col-head">Done<span data-count-for="done">0</span></div><div data-cards-for="done"></div></div>
+            </div>
+          </div>
+          <div class="tabpane" id="tab-approvals" style="display:none;">
+            <!-- BACKEND: populated from AOS_API.approvals.listForProject(projectId) -->
+            <div id="approvalsList" data-project-id=""></div>
+          </div>
+          <div class="tabpane" id="tab-comments" style="display:none;">
+            <div class="composer">
+              <textarea rows="2" id="newCommentBody" name="newCommentBody" placeholder="Write a comment… use @ to mention someone"></textarea>
+              <div class="composer-foot">
+                <label class="toggle-vis client"><input type="checkbox" id="newCommentVisibleToClient" name="newCommentVisibleToClient" style="margin-right:4px;"><i data-lucide="globe" style="width:11px;height:11px;"></i>Visible to client</label>
+                <button class="btn btn-primary" data-action="submitComment"><i data-lucide="send"></i>Comment</button>
+              </div>
+            </div>
+            <!-- BACKEND: populated from AOS_API.comments.listForProject(projectId) -->
+            <div id="commentsList" data-project-id=""></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ MY TASKS ============ -->
+      <div class="screen" id="screen-mytasks">
+        <div class="page">
+          <h1 class="page-title" style="margin-bottom:4px;">My Tasks</h1>
+          <p class="subtle" style="margin:0 0 20px;">All tasks in one vertical view — hover any tile for full details.</p>
+          <!-- BACKEND: populated from AOS_API.tasks.listForUser(currentUserId), grouped by status -->
+          <div class="task-groups" id="myTasksGroups">
+            <div>
+              <div class="task-group-head"><span class="task-priority-dot" style="background:var(--text-primary); width:7px; height:7px; border-radius:50%; display:inline-block;"></span>To Do <span class="task-group-count" data-count-for="todo">0</span></div>
+              <div class="task-tile-grid" data-cards-for="todo"></div>
+            </div>
+            <div>
+              <div class="task-group-head"><span class="task-priority-dot" style="background:var(--warning); width:7px; height:7px; border-radius:50%; display:inline-block;"></span>In Progress <span class="task-group-count" data-count-for="inprogress">0</span></div>
+              <div class="task-tile-grid" data-cards-for="inprogress"></div>
+            </div>
+            <div>
+              <div class="task-group-head"><span class="task-priority-dot" style="background:var(--danger); width:7px; height:7px; border-radius:50%; display:inline-block;"></span>In Review <span class="task-group-count" data-count-for="inreview">0</span></div>
+              <div class="task-tile-grid" data-cards-for="inreview"></div>
+            </div>
+            <div>
+              <div class="task-group-head"><span class="task-priority-dot" style="background:var(--success); width:7px; height:7px; border-radius:50%; display:inline-block;"></span>Done <span class="task-group-count" data-count-for="done">0</span></div>
+              <div class="task-tile-grid" data-cards-for="done"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ MEMBERS (Directory + Teams) ============ -->
+      <div class="screen" id="screen-clients">
+        <div class="page">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:8px;">
+            <h1 class="page-title">Members</h1>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-outline" data-action="openModal" data-arg="syncModal"><i data-lucide="refresh-cw"></i>Sync with Outlook/Teams</button>
+              <button class="btn btn-primary" data-action="openModal" data-arg="inviteModal"><i data-lucide="user-plus"></i>Invite</button>
+            </div>
+          </div>
+          <p class="subtle" style="margin:0 0 16px;">Synced from the <b>@omc.com</b> Microsoft 365 directory (Outlook contacts + Teams roster). Last sync: just now.</p>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:8px;">
+            <div class="section-title" style="margin:0;">Teams</div>
+            <span class="admin-badge" id="adminModeBadge"><i data-lucide="shield-check" style="width:11px;height:11px;"></i>Admin mode · aaditya.joshi@omc.com</span>
+          </div>
+          <p class="subtle" style="margin:0 0 18px;">Members grouped by team/department. Tap a team to view its full roster.</p>
+          <div class="bento" id="bentoGrid" style="margin-bottom:28px;"></div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <div class="section-title" style="margin:0;">Directory</div>
+            <div class="dir-sort-group">
+              <span class="subtle" style="margin-right:2px;">Sort:</span>
+              <button type="button" class="dir-sort-btn active" data-sort="az" data-action="setDirectorySort" data-arg="az">A–Z</button>
+              <button type="button" class="dir-sort-btn" data-sort="team" data-action="setDirectorySort" data-arg="team">By Team</button>
+            </div>
+          </div>
+          <div class="row-list" style="margin-bottom:28px; overflow-x:auto;">
+            <div class="row row-head" style="grid-template-columns:1fr 140px 140px 100px;"><span>Name</span><span>Role</span><span>Team</span><span>Status</span></div>
+            <div id="directoryRows"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ REPORTS ============ -->
+      <div class="screen" id="screen-reports">
+        <div class="page">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+            <h1 class="page-title">Reports</h1>
+            <div style="display:flex; gap:8px;"><button class="btn btn-outline"><i data-lucide="download"></i>Export CSV</button><button class="btn btn-outline"><i data-lucide="download"></i>Export PDF</button></div>
+          </div>
+          <p class="subtle" style="margin:-8px 0 16px;">Live view, generated directly from the Projects data set · July 2026</p>
+          <div class="two-col">
+            <div class="card">
+              <div class="section-title">Overall Health <span class="subtle" style="font-weight:400;">— tap the chart for the full project list</span></div>
+              <div class="clickable-row" style="display:flex; align-items:center; justify-content:center; height:160px;" data-action="openHealthModal">
+                <svg width="140" height="140" viewBox="0 0 42 42" id="healthDonut"></svg>
+              </div>
+              <div style="display:flex; justify-content:center; gap:14px; font-size:12px; flex-wrap:wrap;">
+                <span><span style="display:inline-block;width:8px;height:8px;background:#3B82F6;border-radius:50%;margin-right:4px;"></span>Active</span>
+                <span><span style="display:inline-block;width:8px;height:8px;background:var(--success);border-radius:50%;margin-right:4px;"></span>Completed</span>
+                <span><span style="display:inline-block;width:8px;height:8px;background:var(--danger);border-radius:50%;margin-right:4px;"></span>Delayed</span>
+                <span><span style="display:inline-block;width:8px;height:8px;background:var(--warning);border-radius:50%;margin-right:4px;"></span>Awaiting Approval</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="section-title">Work Ownership <span class="subtle" style="font-weight:400;">— tap a team for names</span></div>
+              <p class="subtle" style="margin:0 0 10px;">Every team's share of the organization's total open work, split across all teams to add up to 100%.</p>
+              <div class="ownership-stack" id="ownershipStack"></div>
+              <div class="ownership-legend" id="ownershipLegend"></div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:14px;" id="workloadDeptList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ FINANCE ============ -->
+      <div class="screen" id="screen-finance">
+        <div class="page">
+          <h1 class="page-title" style="margin-bottom:4px;">Finance</h1>
+          <p class="subtle" style="margin:0 0 18px;">Track SOW, Estimate Request and JCR status for every project. Tap a status to flip between Initiated and Closed.</p>
+          <div id="financeBody"></div>
+        </div>
+      </div>
+
+      <!-- ============ ARCHIVED POSTS ============ -->
+      <div class="screen" id="screen-archives">
+        <div class="page">
+          <h1 class="page-title" style="margin-bottom:4px;">Completed Projects</h1>
+          <p class="subtle" style="margin:0 0 16px;">Completed projects live here, out of the active Projects lists — browse by category or see everything at once.</p>
+          <div class="archive-tabs" id="archiveTabs">
+            <div class="archive-tab active" data-arch="all">All Projects</div>
+            <div class="archive-tab" data-arch="Tech">Tech Projects</div>
+            <div class="archive-tab" data-arch="NonTech">Non-Tech Projects</div>
+            <div class="archive-tab" data-arch="EGF">EGF Projects</div>
+            <div class="archive-tab" data-arch="TCZ">TCZ Driven Projects</div>
+            <div class="archive-tab" data-arch="Embitel">Embitel Driven Projects</div>
+          </div>
+          <div id="archiveList"></div>
+        </div>
+      </div>
+
+      <!-- ============ CLIENT PORTAL VIEW ============ -->
+      <div class="screen" id="screen-portal">
+        <div class="page">
+          <div class="card" style="background:var(--surface); border-style:dashed; margin-bottom:20px;">
+            <b>Preview note:</b> this is what Vikram Singh (Royal Enfield's Client Admin) sees — no budgets, no internal comments, no People/Reports/Finance/Settings.
+          </div>
+          <h1 class="page-title" style="margin-bottom:16px;">Your Projects</h1>
+          <!-- BACKEND: populated from AOS_API.projects.list({ clientId: currentClientId }) -->
+          <div id="clientPortalProjectList"></div>
+        </div>
+      </div>
+
+      <!-- ============ TEAM WORK OWNERSHIP DETAIL (sub-page from Reports) ============ -->
+      <div class="screen" id="screen-workload-detail">
+        <div class="page">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+            <button class="btn btn-outline" data-action="navScreen" data-screen="reports"><i data-lucide="arrow-left"></i>Back to Reports</button>
+            <h1 class="page-title" style="margin:0;" id="workloadDeptTitle">Team Work Ownership</h1>
+          </div>
+          <div class="card" id="workloadDeptBody"></div>
+        </div>
+      </div>
+
+      <!-- ============ ADMIN CMS ============ -->
+      <div class="screen" id="screen-admin">
+        <div class="page">
+          <h1 class="page-title" style="margin-bottom:4px;">Admin CMS</h1>
+          <p class="subtle" style="margin:0 0 18px;">Manage the organization's clients, agencies, third parties, brands, teams, members, roles, and platform-level settings.</p>
+
+          <div class="tabs" id="adminTabs">
+            <div class="tab active" data-admin-tab="clients">Clients</div>
+            <div class="tab" data-admin-tab="agencies">Agencies</div>
+            <div class="tab" data-admin-tab="thirdParties">Third Parties</div>
+            <div class="tab" data-admin-tab="brands">Brands</div>
+            <div class="tab" data-admin-tab="teams">Teams</div>
+            <div class="tab" data-admin-tab="members">Members</div>
+            <div class="tab" data-admin-tab="roles">Roles</div>
+            <div class="tab" data-admin-tab="orgSettings">Org Settings</div>
+            <div class="tab" data-admin-tab="msTenantSettings">MS Tenant</div>
+          </div>
+
+          <!-- Generic list panes for the 7 CRUD resources -->
+          <div class="admin-pane" id="admin-pane-clients">
+            <div class="admin-toolbar"><span class="subtle">Brands and organizations AOS delivers work for.</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="clients"><i data-lucide="plus"></i>Add client</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="clients"><thead><tr><th>Name</th><th>Primary contact</th><th>Status</th><th></th></tr></thead><tbody data-admin-tbody="clients"></tbody></table></div>
+          </div>
+          <div class="admin-pane" id="admin-pane-agencies" style="display:none;">
+            <div class="admin-toolbar"><span class="subtle">Partner agencies collaborating on shared accounts.</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="agencies"><i data-lucide="plus"></i>Add agency</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="agencies"><thead><tr><th>Name</th><th>Contact email</th><th>Status</th><th></th></tr></thead><tbody data-admin-tbody="agencies"></tbody></table></div>
+          </div>
+          <div class="admin-pane" id="admin-pane-thirdParties" style="display:none;">
+            <div class="admin-toolbar"><span class="subtle">External vendors, contractors, and production partners.</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="thirdParties"><i data-lucide="plus"></i>Add third party</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="thirdParties"><thead><tr><th>Name</th><th>Service type</th><th>Status</th><th></th></tr></thead><tbody data-admin-tbody="thirdParties"></tbody></table></div>
+          </div>
+          <div class="admin-pane" id="admin-pane-brands" style="display:none;">
+            <div class="admin-toolbar"><span class="subtle">Brands nested under each client (e.g. Royal Enfield's sub-brands).</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="brands"><i data-lucide="plus"></i>Add brand</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="brands"><thead><tr><th>Name</th><th>Client</th><th>Status</th><th></th></tr></thead><tbody data-admin-tbody="brands"></tbody></table></div>
+          </div>
+          <div class="admin-pane" id="admin-pane-teams" style="display:none;">
+            <div class="admin-toolbar"><span class="subtle">Internal teams / departments (mirrors the Members bento grid).</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="teams"><i data-lucide="plus"></i>Add team</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="teams"><thead><tr><th>Name</th><th>Members</th><th>Status</th><th></th></tr></thead><tbody data-admin-tbody="teams"></tbody></table></div>
+          </div>
+          <div class="admin-pane" id="admin-pane-members" style="display:none;">
+            <div class="admin-toolbar"><span class="subtle">Every member across every team, editable at the record level.</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="members"><i data-lucide="plus"></i>Add member</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="members"><thead><tr><th>Name</th><th>Email</th><th>Team</th><th>Role</th><th></th></tr></thead><tbody data-admin-tbody="members"></tbody></table></div>
+          </div>
+          <div class="admin-pane" id="admin-pane-roles" style="display:none;">
+            <div class="admin-toolbar"><span class="subtle">Permission roles assignable to members (Admin, Project Manager, Member, …).</span><button class="btn btn-primary btn-sm" data-action="openAdminCreateForm" data-arg="roles"><i data-lucide="plus"></i>Add role</button></div>
+            <div class="admin-table-wrap"><table class="admin-table" data-admin-resource="roles"><thead><tr><th>Name</th><th>Description</th><th></th></tr></thead><tbody data-admin-tbody="roles"></tbody></table></div>
+          </div>
+
+          <!-- Singleton settings panes (GET/PUT, no rows) -->
+          <div class="admin-pane" id="admin-pane-orgSettings" style="display:none;">
+            <div class="card">
+              <div class="section-title">Organization Settings</div>
+              <form id="orgSettingsForm" novalidate>
+                <div class="field"><label for="orgName">Organization name</label><input type="text" id="orgName" name="orgName"></div>
+                <div class="field"><label for="orgTimezone">Default timezone</label><input type="text" id="orgTimezone" name="timezone" placeholder="e.g. Asia/Kolkata"></div>
+                <div class="field"><label for="orgWorkweek">Work week starts on</label>
+                  <select id="orgWorkweek" name="workweekStart"><option value="mon">Monday</option><option value="sun">Sunday</option></select>
+                </div>
+                <button type="button" class="btn btn-primary" data-action="saveOrgSettings"><i data-lucide="check-circle-2"></i>Save settings</button>
+              </form>
+            </div>
+          </div>
+          <div class="admin-pane" id="admin-pane-msTenantSettings" style="display:none;">
+            <div class="card">
+              <div class="section-title">Microsoft Tenant Settings</div>
+              <p class="subtle" style="margin-top:0;">Used for Microsoft Graph sync (Outlook contacts, Teams roster, mail send). The client secret is never stored or displayed in the browser — it lives server-side as a Vercel environment variable.</p>
+              <form id="msTenantForm" novalidate>
+                <div class="field"><label for="msTenantId">Tenant ID</label><input type="text" id="msTenantId" name="tenantId" placeholder="00000000-0000-0000-0000-000000000000"></div>
+                <div class="field"><label for="msClientId">App (client) ID</label><input type="text" id="msClientId" name="clientId" placeholder="00000000-0000-0000-0000-000000000000"></div>
+                <div class="field"><label for="msRedirectUri">Redirect URI</label><input type="url" id="msRedirectUri" name="redirectUri" placeholder="https://your-app.vercel.app/api/auth/callback"></div>
+                <button type="button" class="btn btn-primary" data-action="saveMsTenantSettings"><i data-lucide="check-circle-2"></i>Save settings</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shared create/edit form modal for every Admin CMS resource -->
+      <div class="modal-overlay" id="adminFormModal">
+        <div class="modal">
+          <div class="modal-head"><h2 id="adminFormModalTitle">Add record</h2><button class="modal-close" data-action="closeModal" data-arg="adminFormModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+          <form class="modal-body" id="adminForm" novalidate data-resource="" data-record-id=""></form>
+          <div class="modal-foot">
+            <button class="btn btn-outline" data-action="closeModal" data-arg="adminFormModal">Cancel</button>
+            <button class="btn btn-primary" data-action="submitAdminForm"><i data-lucide="check-circle-2"></i>Save</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- NEW PROJECT MODAL -->
+<div class="modal-overlay" id="newProjectModal">
+  <div class="modal">
+    <div class="modal-head"><h2>New Project</h2><button class="modal-close" data-action="closeModal" data-arg="newProjectModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <form class="modal-body" id="newProjectForm" novalidate>
+      <div class="field"><label for="npName">Project name</label><input type="text" id="npName" name="name" required minlength="2" placeholder="e.g. Rider Mania — Content Sprint"></div>
+      <div class="field"><label for="npCategory">Category</label>
+        <select id="npCategory" name="category" required><option value="Tech">Tech Projects</option><option value="NonTech">Non-Tech Projects</option><option value="EGF">EGF Projects</option><option value="TCZ">TCZ Driven Projects</option><option value="Embitel">Embitel Projects</option></select>
+      </div>
+      <div class="field"><label for="npPoc">Brand POC</label><input type="text" id="npPoc" name="brandPoc" placeholder="e.g. Vikram Singh"></div>
+      <div class="two-col" style="margin-bottom:0;">
+        <div class="field"><label for="npInit">Initiation date</label><input type="date" id="npInit" name="initiationDate"></div>
+        <div class="field"><label for="npGoLive">Go-live date</label><input type="date" id="npGoLive" name="goLiveDate"></div>
+      </div>
+      <div class="field"><label for="npEffort">Project effort (₹)</label><input type="number" id="npEffort" name="effort" min="0" step="1" placeholder="e.g. 500000"></div>
+      <div class="field"><label for="npAssignees">Assignees (comma separated)</label><input type="text" id="npAssignees" name="assignees" placeholder="e.g. Rashi, Avik"></div>
+      <div class="sync-note"><i data-lucide="check-circle-2"></i>Saving will sync this project to the shared AOS workspace so the whole team sees it instantly.</div>
+    </form>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-action="closeModal" data-arg="newProjectModal">Cancel</button>
+      <button class="btn btn-primary" data-action="saveAndSyncProject"><i data-lucide="check-circle-2"></i>Save project</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PROJECT MODAL (Admin / Project Manager only) -->
+<div class="modal-overlay" id="editProjectModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Edit Project</h2><button class="modal-close" data-action="closeModal" data-arg="editProjectModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <form class="modal-body" id="editProjectForm" novalidate data-project-id="">
+      <div class="field"><label for="epName">Project name</label><input type="text" id="epName" name="name" required minlength="2"></div>
+      <div class="field"><label for="epPoc">Brand POC</label><input type="text" id="epPoc" name="brandPoc"></div>
+      <div class="two-col" style="margin-bottom:0;">
+        <div class="field"><label for="epInit">Initiation date</label><input type="date" id="epInit" name="initiationDate"></div>
+        <div class="field"><label for="epGoLive">Go-live date</label><input type="date" id="epGoLive" name="goLiveDate"></div>
+      </div>
+      <div class="field"><label for="epEffort">Project effort (₹)</label><input type="number" id="epEffort" name="effort" min="0" step="1"></div>
+      <div class="field"><label for="epAssignees">Assignees (comma separated)</label><input type="text" id="epAssignees" name="assignees"></div>
+      <div class="field"><label for="epProgress">Progress (%)</label><input type="range" min="0" max="100" id="epProgress" name="progress" data-input-action="updateProgressLabel">
+        <div class="subtle" id="epProgressVal" style="margin-top:4px;">0%</div>
+      </div>
+      <div class="field"><label for="epHealth">Health status</label>
+        <select id="epHealth" name="health"><option value="active">Active</option><option value="completed">Completed</option><option value="delayed">Delayed</option><option value="awaiting">Awaiting Approval</option></select>
+      </div>
+      <div class="sync-note"><i data-lucide="shield-check"></i>Only Admin and Project Manager roles can edit project records.</div>
+    </form>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-action="closeModal" data-arg="editProjectModal">Cancel</button>
+      <button class="btn btn-primary" data-action="saveEditProject"><i data-lucide="check-circle-2"></i>Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMINDER MODAL (Today's Deadlines / task tap) -->
+<div class="modal-overlay" id="reminderModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Task details</h2><button class="modal-close" data-action="closeModal" data-arg="reminderModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <div class="modal-body" id="reminderModalBody"></div>
+    <div class="modal-foot"><button class="btn btn-outline" data-action="closeModal" data-arg="reminderModal">Close</button></div>
+  </div>
+</div>
+
+<!-- HEALTH MODAL (Reports donut drill-down / Home KPI drill-down) -->
+<div class="modal-overlay" id="healthModal">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h2 id="healthModalTitle">Projects — Overall Health</h2><button class="modal-close" data-action="closeModal" data-arg="healthModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <div class="modal-body" id="healthModalBody"></div>
+    <div class="modal-foot"><button class="btn btn-outline" data-action="closeModal" data-arg="healthModal">Close</button></div>
+  </div>
+</div>
+
+<!-- DEPARTMENT / TEAM MODAL (Members) -->
+<div class="modal-overlay" id="deptModal">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h2 id="deptModalTitle">Team</h2><button class="modal-close" data-action="closeModal" data-arg="deptModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <div class="modal-body" style="overflow-x:auto;" data-team-id=""><table class="member-modal-table"><thead><tr><th>Name</th><th>Position</th><th>Email</th><th>Phone</th></tr></thead><tbody id="deptModalBody"></tbody></table></div>
+    <div class="modal-foot" id="deptModalFoot"></div>
+  </div>
+</div>
+
+<!-- SYNC WITH OUTLOOK/TEAMS MODAL -->
+<div class="modal-overlay" id="syncModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Sync contacts</h2><button class="modal-close" data-action="closeModal" data-arg="syncModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <div class="modal-body">
+      <p class="subtle" style="margin-top:0;">Choose how you'd like to bring contacts into the Members directory.</p>
+
+      <div class="sync-option" id="syncOptionGraph">
+        <div class="sync-option-icon"><i data-lucide="microsoft"></i></div>
+        <div class="sync-option-body">
+          <div class="sync-option-title">Import from Outlook / Teams</div>
+          <div class="subtle">Sign in with the Microsoft account you're using right now and pull its contacts and Teams roster automatically.</div>
+          <!-- BACKEND: AOS_API.graph.startContactImport() → Express /api/integrations/graph/contacts/import -->
+          <button class="btn btn-outline btn-sm" style="margin-top:10px;" data-action="startGraphImport"><i data-lucide="log-in"></i>Connect this account</button>
+          <div id="graphImportStatus" class="sync-note" style="display:none; margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <div class="sync-option" id="syncOptionFile">
+        <div class="sync-option-icon"><i data-lucide="file-spreadsheet"></i></div>
+        <div class="sync-option-body">
+          <div class="sync-option-title">Import from a file</div>
+          <div class="subtle">Upload a contacts export as .csv or .xlsx — one row per person, with name, email and role columns.</div>
+          <!-- BACKEND: file is sent to AOS_API.graph.importFromFile(file) → Express parses CSV/XLSX server-side -->
+          <input type="file" id="contactFileInput" name="contactFile" accept=".csv,.xls,.xlsx" style="margin-top:10px; font-size:12px; width:100%;" data-change-action="handleContactFileSelect">
+          <div id="fileImportStatus" class="sync-note" style="display:none; margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <div class="sync-note"><i data-lucide="shield-check"></i>Imported contacts are reviewed before they're added to the live directory — nothing is auto-published.</div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" data-action="closeModal" data-arg="syncModal">Close</button></div>
+  </div>
+</div>
+
+<!-- INVITE MODAL -->
+<div class="modal-overlay" id="inviteModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Invite a member</h2><button class="modal-close" data-action="closeModal" data-arg="inviteModal"><i data-lucide="x" style="width:16px;height:16px;"></i></button></div>
+    <form class="modal-body" id="inviteForm" novalidate>
+      <div class="field"><label for="inviteName">Name</label><input type="text" id="inviteName" name="name" required placeholder="e.g. Priya Sharma"></div>
+      <div class="field"><label for="inviteEmail">Email</label><input type="email" id="inviteEmail" name="email" required placeholder="name@omc.com"></div>
+      <div class="field"><label for="inviteDept">Team / Department</label>
+        <select id="inviteDept" name="teamId" required></select>
+      </div>
+      <div class="field"><label for="inviteRole">Role</label>
+        <select id="inviteRole" name="role"><option value="Member">Member</option><option value="Project Manager">Project Manager</option><option value="Admin">Admin</option></select>
+      </div>
+      <!-- BACKEND: AOS_API.graph.sendInviteMail(payload) → Express /api/integrations/mail/send (Graph sendMail) -->
+      <button type="button" class="btn btn-outline" style="width:100%; justify-content:center;" data-action="sendInviteViaOutlook"><i data-lucide="mail"></i>Send invite via Outlook</button>
+      <div id="inviteStatus" class="sync-note" style="display:none; margin-top:10px;"></div>
+      <div class="sync-note" style="margin-top:10px;"><i data-lucide="info"></i>This opens Outlook's compose window (or your Graph mail integration once wired up) pre-filled with an invite link.</div>
+    </form>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-action="closeModal" data-arg="inviteModal">Cancel</button>
+      <button class="btn btn-primary" data-action="addInvitedMember"><i data-lucide="user-plus"></i>Add to directory</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMMAND PALETTE -->
+<div class="overlay" id="paletteOverlay">
+  <div class="palette">
+    <input id="paletteInput" name="paletteQuery" placeholder="Search projects, tasks, people, files…" autofocus data-input-action="handlePaletteInput">
+    <!-- BACKEND: populated from AOS_API.search.query(q) — grouped by result type -->
+    <div id="paletteResults"></div>
+  </div>
+</div>
+
+<!-- TASK HOVER POPOVER -->
+<div class="task-popover" id="taskPopover">
+  <div class="tp-title" id="tpTitle"></div>
+  <div class="tp-row"><span class="tp-label">Project</span><span id="tpProject"></span></div>
+  <div class="tp-row"><span class="tp-label">Deadline</span><span id="tpDeadline"></span></div>
+  <div class="tp-row"><span class="tp-label">Assignee</span><span id="tpAssignee"></span></div>
+  <div class="tp-row"><span class="tp-label">Assigned by</span><span id="tpAssignedby"></span></div>
+  <div class="tp-row"><span class="tp-label">Team / Dept.</span><span id="tpTeam"></span></div>
+</div>
+
+<!-- NOTIFICATIONS -->
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-head">Notifications<span style="color:var(--text-secondary); font-weight:400; cursor:pointer;" data-action="markAllNotificationsRead">Mark all read</span></div>
+  <!-- BACKEND: populated from AOS_API.notifications.list() -->
+  <div id="notifList"></div>
+</div>
+
+<!-- =========================================================
+     ADMIN CMS SCREEN
+     One screen, nine tab-panes — Clients / Agencies / Third Parties /
+     Brands / Teams / Members / Roles / Organization Settings /
+     Microsoft Tenant Settings. Every list is generic: it's rendered by
+     renderAdminList() and backed by AOS_API.admin.<resource>.
+========================================================= -->
+
+<script>
+  lucide.createIcons();
+
+  /* =========================================================
+     DATA MODEL
+     No business data is hardcoded here anymore — every entity below
+     starts empty and is populated by AOS_API calls (see api.js) during
+     init() at the bottom of this file. Render functions read from
+     these in-memory caches so the UI stays fast, but the caches
+     themselves always come from the backend.
+  ========================================================= */
+  const CATEGORY_LABEL = { Tech:'Tech Projects', NonTech:'Non-Tech Projects', EGF:'EGF Projects', TCZ:'TCZ Driven Projects', Embitel:'Embitel Projects' };
+  const HEALTH_LABEL = { active:'Active', completed:'Completed', delayed:'Delayed', awaiting:'Awaiting Approval' };
+  const HEALTH_PILL_CLASS = { active:'pill-active', completed:'pill-completed', delayed:'pill-delayed', awaiting:'pill-awaiting' };
+  const HEALTH_ICON = { active:'folder-kanban', completed:'check-circle-2', delayed:'alert-triangle', awaiting:'clipboard-check' };
+
+  // BACKEND: AOS_API.projects.list() → GET /api/projects (Supabase `projects` table)
+  let PROJECTS = [];
+
+  /* =========================================================
+     GENERIC ASYNC STATE HELPERS
+     Every dynamic section on screen goes through one of these three
+     states before it has real content: loading → then either an
+     empty state, an error state (with retry), or the rendered rows.
+  ========================================================= */
+  function renderLoading(container, label) {
+    if (!container) return;
+    container.innerHTML = '<div class="state-box"><div class="state-spinner"></div><span>' + (label || 'Loading…') + '</span></div>';
+  }
+  function renderEmpty(container, label) {
+    if (!container) return;
+    container.innerHTML = '<div class="empty">' + (label || 'Nothing here yet') + '</div>';
+  }
+  function renderError(container, err, retryFn) {
+    if (!container) return;
+    const msg = (err && err.message) || 'Something went wrong loading this data.';
+    const retryId = 'retry-' + Math.random().toString(36).slice(2, 9);
+    container.innerHTML = '<div class="state-box state-error"><i data-lucide="alert-triangle"></i><span>' + msg + '</span>' +
+      (retryFn ? '<button type="button" class="btn btn-outline btn-sm state-retry" id="' + retryId + '">Retry</button>' : '') + '</div>';
+    lucide.createIcons();
+    if (retryFn) document.getElementById(retryId).addEventListener('click', retryFn);
+  }
+  // Wraps an async loader with the loading/empty/error lifecycle above.
+  // `fetchFn` resolves to an array; `isEmpty` and `onData` let each call
+  // site decide what "empty" means and what to do once data arrives.
+  async function loadInto(container, fetchFn, onData, opts = {}) {
+    if (!container) return;
+    renderLoading(container, opts.loadingLabel);
+    try {
+      const data = await fetchFn();
+      const list = data || [];
+      if (!list.length && !opts.allowEmptyRender) {
+        renderEmpty(container, opts.emptyLabel);
+        return;
+      }
+      onData(list);
+    } catch (err) {
+      renderError(container, err, () => loadInto(container, fetchFn, onData, opts));
+    }
+  }
+
+  let currentProjectId = null;
+  let currentCategory = null;
+  let homeTaskRange = 'today';
+  let catSortField = null;   // 'goLive' | 'initiation' | null
+  let catSortDir = 'asc';    // 'asc' | 'desc'
+  let catBrandPocFilter = '';
+  let cat22ftPocFilter = '';
+
+  const ADMIN_EMAIL = 'aaditya.joshi@omc.com';
+  const currentUserEmail = 'aaditya.joshi@omc.com'; // signed-in user for this preview
+  let currentRole = 'Admin'; // Admin | Project Manager | Member
+  function isAdminRole() { return currentRole === 'Admin'; }
+  function canEditProjects() { return currentRole === 'Admin' || currentRole === 'Project Manager'; }
+
+  // BACKEND: AOS_API.members.listTeams() → GET /api/teams (Supabase `teams` + `team_members`)
+  // Shape preserved as { [teamName]: [memberName, ...] } to keep render functions unchanged;
+  // swap for { [team.id]: team.members.map(m => m.name) } once real IDs exist.
+  let departments = {};
+
+  // BACKEND: AOS_API.members.listDirectory() → GET /api/members (Supabase `members` table)
+  let MEMBER_DIRECTORY = {};
+  // BACKEND: AOS_API.reports.getWorkOwnership() → GET /api/reports/work-ownership
+  // Shape: { [teamName]: [[memberName, loadPct], ...] }
+  let workload = {};
+
+  // BACKEND: AOS_API.finance.list() → GET /api/finance (Supabase `finance_status` table)
+  const FINANCE_PROCESSES = ['SOW', 'Estimate Request', 'JCR'];
+  let financeState = {};
+
+  /* ===== helpers ===== */
+  function fmtDate(d) {
+    if (!d || d === '—') return '—';
+    const dt = new Date(d + 'T00:00:00');
+    if (isNaN(dt)) return d;
+    return dt.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  }
+  function fmtRupees(n) {
+    if (!n) return '—';
+    return '₹' + Number(n).toLocaleString('en-IN');
+  }
+  function initialsOf(name) {
+    return name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0,2).toUpperCase();
+  }
+  function progressBand(pct) {
+    if (pct <= 40) return 'low';
+    if (pct <= 80) return 'mid';
+    return 'high';
+  }
+  function stageLabel(pct) {
+    if (pct <= 40) return 'Kick-off';
+    if (pct <= 80) return 'UAT Submission';
+    return 'Go-Live';
+  }
+  function projectById(id) { return PROJECTS.find(p => p.id === id); }
+
+  /* =========================================================
+     NAVIGATION
+  ========================================================= */
+  const SCREEN_LABELS = {
+    'dashboard':'Home', 'projects-hub':'Projects', 'mytasks':'My Tasks',
+    'clients':'Members', 'reports':'Reports', 'finance':'Finance',
+    'archives':'Completed Projects', 'portal':'Client Portal'
+  };
+
+  // `currentPath` is the breadcrumb shown on screen — the ancestor chain to
+  // where you are right now (e.g. Home > Projects > Tech Projects). It's
+  // replaced wholesale on every navigation, so visiting a sibling category
+  // swaps that one crumb instead of stacking alongside it.
+  //
+  // `visitHistory` is a separate, plain sequential log of pages actually
+  // visited, used only to power the round "back to last page" button —
+  // independent of where those pages sit in the hierarchy.
+  let currentPath = [];
+  let visitHistory = [];
+
+  function crumbScreen(id) { return { key: id, label: SCREEN_LABELS[id] || id, action: (fb) => navScreen(id, fb) }; }
+  function crumbCategory(cat) { return { key: 'cat:' + cat, label: CATEGORY_LABEL[cat], action: (fb) => openCategory(cat, fb) }; }
+  function crumbProject(p) { return { key: 'proj:' + p.id, label: p.name, action: (fb) => openProject(p.id, fb) }; }
+  function crumbWorkload(dept) { return { key: 'wl:' + dept, label: dept, action: (fb) => openWorkloadDept(dept, fb) }; }
+
+  function navTo(path, fromBack) {
+    currentPath = path;
+    const leaf = path[path.length - 1];
+    if (!fromBack) {
+      if (!visitHistory.length || visitHistory[visitHistory.length - 1].key !== leaf.key) {
+        visitHistory.push(leaf);
+        if (visitHistory.length > 20) visitHistory.shift();
+      } else {
+        visitHistory[visitHistory.length - 1] = leaf;
+      }
+    }
+    renderNavTrail();
+  }
+  function navScreen(id, fromBack) {
+    showScreen(id);
+    // Sidebar tabs are peers (Home, Projects, Members, Reports...), so jumping
+    // between them shows a single crumb — not "Home > Projects". Only My Tasks
+    // is genuinely nested under Home in the sidebar, so it alone gets 2 levels.
+    const path = id === 'mytasks' ? [crumbScreen('dashboard'), crumbScreen('mytasks')] : [crumbScreen(id)];
+    navTo(path, fromBack);
+    if (id === 'mytasks') renderMyTasks();
+    if (id === 'admin') showAdminTab(currentAdminTab);
+  }
+
+  // BACKEND: AOS_API.tasks.listForUser(currentUserEmail) → GET /api/tasks?userId=
+  function renderMyTasks() {
+    const container = document.getElementById('myTasksGroups');
+    loadInto(
+      container,
+      () => AOS_API.tasks.listForUser(currentUserEmail),
+      (list) => {
+        MY_TASKS_CACHE = list;
+        container.innerHTML = Object.keys(TASK_STATUS_LABEL).map(status => (
+          '<div><div class="task-group-head">' + TASK_STATUS_LABEL[status] + ' <span class="task-group-count" data-count-for="' + status + '"></span></div>' +
+          '<div class="task-tile-grid" data-cards-for="' + status + '"></div></div>'
+        )).join('');
+        Object.keys(TASK_STATUS_LABEL).forEach(status => {
+          const inStatus = list.filter(t => t.status === status);
+          container.querySelector('[data-count-for="' + status + '"]').textContent = inStatus.length;
+          container.querySelector('[data-cards-for="' + status + '"]').innerHTML = inStatus.length
+            ? inStatus.map(taskCardHtml).join('')
+            : '<div class="empty" style="padding:20px;">Nothing here</div>';
+        });
+      },
+      { loadingLabel: 'Loading your tasks…', emptyLabel: 'You have no tasks assigned yet', allowEmptyRender: true }
+    );
+  }
+  let MY_TASKS_CACHE = [];
+  function goBack() {
+    if (visitHistory.length < 2) return;
+    visitHistory.pop();
+    visitHistory[visitHistory.length - 1].action(true);
+  }
+  function goToTrail(i) {
+    if (currentPath[i]) currentPath[i].action();
+  }
+  function renderNavTrail() {
+    const bar = document.getElementById('navTrailBar');
+    if (!bar) return;
+    const pills = currentPath.map((n, i) => {
+      const isLast = i === currentPath.length - 1;
+      return '<button type="button" class="trail-pill' + (isLast ? ' current' : '') + '" style="--i:' + i + '" ' +
+        (isLast ? 'disabled' : 'data-action="goToTrail" data-arg="' + i + '"') + '>' + n.label + '</button>';
+    }).join('<span class="trail-arrow">›</span>');
+    bar.innerHTML =
+      '<button type="button" class="trail-back" data-action="goBack" title="Back to last page" ' + (visitHistory.length < 2 ? 'disabled' : '') + '>' +
+        '<i data-lucide="corner-up-left"></i>' +
+      '</button>' +
+      '<div class="trail-path">' + pills + '</div>';
+    lucide.createIcons();
+  }
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    document.getElementById('screen-' + id).classList.add('show');
+    document.querySelectorAll('.nav-item, .nav-sub-item').forEach(n => n.classList.remove('active'));
+    let navMatch = document.querySelector('.nav-item[data-screen="' + id + '"]');
+    if (id === 'project-category' || id === 'project-detail') navMatch = document.querySelector('.nav-item[data-screen="projects-hub"]');
+    if (id === 'mytasks') { navMatch = document.querySelector('.nav-item[data-screen="dashboard"]'); document.querySelector('.nav-sub-item[data-screen="mytasks"]').classList.add('active'); }
+    if (id === 'workload-detail') navMatch = document.querySelector('.nav-item[data-screen="reports"]');
+    if (id === 'admin') navMatch = document.getElementById('adminNavItem');
+    if (navMatch) navMatch.classList.add('active');
+    closeRail();
+    window.scrollTo(0,0);
+    document.querySelector('.content').scrollTo(0,0);
+  }
+  document.querySelectorAll('.nav-item[data-screen]').forEach(item => {
+    item.addEventListener('click', () => navScreen(item.dataset.screen));
+  });
+  document.querySelectorAll('.nav-sub-item[data-screen]').forEach(item => {
+    item.addEventListener('click', (e) => { e.stopPropagation(); navScreen(item.dataset.screen); });
+  });
+  document.getElementById('homeCaret').closest('.nav-item').addEventListener('click', (e) => {
+    if (e.target.closest('.nav-caret')) { e.stopPropagation(); document.getElementById('homeSub').classList.toggle('open'); document.getElementById('homeCaret').classList.toggle('open'); }
+  });
+  document.getElementById('projCaret').closest('.nav-item').addEventListener('click', (e) => {
+    if (e.target.closest('.nav-caret')) { e.stopPropagation(); document.getElementById('projSub').classList.toggle('open'); document.getElementById('projCaret').classList.toggle('open'); }
+  });
+  document.querySelectorAll('.nav-sub-item[data-cat]').forEach(item => {
+    item.addEventListener('click', (e) => { e.stopPropagation(); openCategory(item.dataset.cat); });
+  });
+  document.getElementById('adminCaret').closest('.nav-item').addEventListener('click', (e) => {
+    if (e.target.closest('.nav-caret')) { e.stopPropagation(); document.getElementById('adminSub').classList.toggle('open'); document.getElementById('adminCaret').classList.toggle('open'); }
+    else { navScreen('admin'); }
+  });
+  document.querySelectorAll('.nav-sub-item[data-admin-tab]').forEach(item => {
+    item.addEventListener('click', (e) => { e.stopPropagation(); navScreen('admin'); showAdminTab(item.dataset.adminTab); });
+  });
+
+  /* Mobile rail drawer */
+  const rail = document.getElementById('rail');
+  const railScrim = document.getElementById('railScrim');
+  function openRail() { rail.classList.add('open'); railScrim.classList.add('show'); }
+  function closeRail() { rail.classList.remove('open'); railScrim.classList.remove('show'); }
+  document.getElementById('hamburgerBtn').addEventListener('click', openRail);
+  document.getElementById('railCloseBtn').addEventListener('click', closeRail);
+  railScrim.addEventListener('click', closeRail);
+
+  /* Role switcher (drives edit permissions) */
+  document.getElementById('roleSelect').addEventListener('change', (e) => {
+    currentRole = e.target.value;
+    document.getElementById('greetSub').textContent = 'Signed in as ' + currentUserEmail + ' · ' + currentRole;
+    renderProjectDetail(currentProjectId);
+    updateAdminNavVisibility();
+  });
+  function updateAdminNavVisibility() {
+    const item = document.getElementById('adminNavItem');
+    const sub = document.getElementById('adminSub');
+    const show = isAdminRole();
+    if (item) item.style.display = show ? 'flex' : 'none';
+    if (sub) sub.style.display = show ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('.tab[data-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const group = tab.closest('.tabs');
+      group.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.tabpane').forEach(p => p.style.display = 'none');
+      document.getElementById('tab-' + tab.dataset.tab).style.display = 'block';
+    });
+  });
+  document.querySelectorAll('#adminTabs .tab[data-admin-tab]').forEach(tab => {
+    tab.addEventListener('click', () => showAdminTab(tab.dataset.adminTab));
+  });
+
+  const paletteOverlay = document.getElementById('paletteOverlay');
+  document.getElementById('openPalette').addEventListener('click', () => paletteOverlay.classList.add('show'));
+  paletteOverlay.addEventListener('click', (e) => { if (e.target === paletteOverlay) paletteOverlay.classList.remove('show'); });
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); paletteOverlay.classList.add('show'); }
+    if (e.key === 'Escape') { paletteOverlay.classList.remove('show'); notifPanel.classList.remove('show'); closeRail(); }
+  });
+
+  const notifPanel = document.getElementById('notifPanel');
+  document.getElementById('bellBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    notifPanel.classList.toggle('show');
+  });
+  document.addEventListener('click', () => notifPanel.classList.remove('show'));
+
+  const themeBtn = document.getElementById('themeToggle');
+  function applyTheme(isDark) {
+    document.body.classList.toggle('dark', isDark);
+    if (themeBtn) themeBtn.innerHTML = (isDark ? '<i data-lucide="sun" style="width:13px;height:13px;"></i><span class="theme-toggle-label">Light</span>' : '<i data-lucide="moon" style="width:13px;height:13px;"></i><span class="theme-toggle-label">Dark</span>');
+    lucide.createIcons();
+  }
+  if (themeBtn) {
+    // Restore last-used theme (falls back to the visitor's OS preference on first visit)
+    let savedTheme = null;
+    try { savedTheme = localStorage.getItem('aos-theme'); } catch (e) { /* storage unavailable */ }
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(savedTheme ? savedTheme === 'dark' : prefersDark);
+    themeBtn.addEventListener('click', () => {
+      const isDark = !document.body.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('aos-theme', isDark ? 'dark' : 'light'); } catch (e) { /* storage unavailable */ }
+    });
+  }
+
+  /* ===== Live clock + time-synced greeting ===== */
+  function updateClock() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+    document.getElementById('clockTime').textContent = timeStr;
+    document.getElementById('clockDate').textContent = dateStr;
+    const hour = now.getHours();
+    const part = hour < 12 ? 'morning' : (hour < 17 ? 'afternoon' : 'evening');
+    document.getElementById('greetText').textContent = 'Good ' + part + ', Aaditya';
+  }
+  updateClock();
+  setInterval(updateClock, 1000 * 30);
+
+  /* ===== Generic modal helpers ===== */
+  function openModal(id) { document.getElementById(id).classList.add('show'); lucide.createIcons(); }
+  function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+  document.querySelectorAll('.modal-overlay').forEach(ov => {
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
+  });
+
+  // BACKEND: AOS_API.projects.create(payload) → POST /api/projects
+  function saveAndSyncProject() {
+    const form = document.getElementById('newProjectForm');
+    if (!form.reportValidity()) return;
+    const name = document.getElementById('npName').value.trim();
+    const payload = {
+      name,
+      category: document.getElementById('npCategory').value,
+      poc: document.getElementById('npPoc').value.trim() || '—',
+      assignees: document.getElementById('npAssignees').value.split(',').map(s=>s.trim()).filter(Boolean),
+      initiation: document.getElementById('npInit').value || null,
+      goLive: document.getElementById('npGoLive').value || null,
+      effort: Number(document.getElementById('npEffort').value) || 0,
+      progress: 0,
+      health: 'awaiting'
+    };
+    AOS_API.projects.create(payload).then(created => {
+      PROJECTS.push(created);
+      financeState[created.id] = { 'SOW':'Initiated', 'Estimate Request':'Initiated', 'JCR':'Initiated' };
+      closeModal('newProjectModal');
+      form.reset();
+      renderHomeKpis();
+      renderCatHub();
+    }).catch(err => alert(err.message));
+  }
+
+  /* ===== Reminder modal (Today's Deadlines / task tap) ===== */
+  function openReminder(title, project, assignee) {
+    document.getElementById('reminderModalBody').innerHTML =
+      '<div style="font-weight:600; margin-bottom:10px;">' + title + '</div>' +
+      '<div class="member-row" style="border-top:none;"><span class="subtle">Project</span><span>' + project + '</span></div>' +
+      '<div class="member-row"><span class="subtle">Assignee</span><span>' + assignee + '</span></div>' +
+      '<div class="member-row"><span class="subtle">Due</span><span class="due-today">Due today</span></div>';
+    openModal('reminderModal');
+  }
+
+  /* =========================================================
+     HOME — interactive KPI cards + My Tasks widget
+  ========================================================= */
+  function renderHomeKpis() {
+    const counts = { active:0, completed:0, delayed:0, awaiting:0 };
+    PROJECTS.forEach(p => { counts[p.health] = (counts[p.health]||0) + 1; });
+    const grid = document.getElementById('homeKpiGrid');
+    const cards = [
+      { key:'active', label:'Active Projects', icon:'folder-kanban', color:'var(--accent)' },
+      { key:'completed', label:'Completed', icon:'check-circle-2', colorClass:'icon-positive' },
+      { key:'delayed', label:'Delayed', icon:'alert-triangle', colorClass:'icon-danger' },
+      { key:'awaiting', label:'Awaiting Approval', icon:'clipboard-check', colorClass:'icon-caution' }
+    ];
+    grid.innerHTML = cards.map(c => (
+      '<div class="card kpi-card" data-action="openHealthModal" data-arg="' + c.key + '">' +
+        '<div class="kpi-label">' + c.label + ' <i data-lucide="' + c.icon + '" ' + (c.colorClass ? 'class="'+c.colorClass+'"' : 'style="color:'+c.color+'"') + ' style="width:15px;height:15px;"></i></div>' +
+        '<div class="kpi-value">' + counts[c.key] + '</div>' +
+        '<div class="kpi-hint"><i data-lucide="mouse-pointer-click" style="width:11px;height:11px;"></i>Tap to see the list</div>' +
+      '</div>'
+    )).join('');
+    lucide.createIcons();
+  }
+
+  function daysUntil(dateStr) {
+    if (!dateStr || dateStr === '—') return null;
+    const target = new Date(dateStr + 'T00:00:00');
+    if (isNaN(target)) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.round((target - today) / 86400000);
+  }
+
+  function renderUpcomingGoLives() {
+    const list = document.getElementById('upcomingGoLiveList');
+    if (!list) return;
+    const upcoming = PROJECTS
+      .filter(p => p.health !== 'completed')
+      .map(p => ({ p, days: daysUntil(p.goLive) }))
+      .filter(x => x.days !== null && x.days >= 0)
+      .sort((a, b) => a.days - b.days)
+      .slice(0, 5);
+    list.innerHTML = upcoming.map(({ p, days }) => {
+      const countdownLabel = days === 0 ? 'Live today' : ('T -' + days + ' day' + (days === 1 ? '' : 's'));
+      const cls = days <= 7 ? 'soon' : 'ok';
+      return '<div class="upcoming-tile" data-project-id="' + p.id + '" data-action="openProject" data-arg="' + p.id + '">' +
+        '<div class="ut-icon"><i data-lucide="rocket"></i></div>' +
+        '<div class="ut-main"><div class="ut-name">' + p.name + '</div><div class="ut-meta">' + CATEGORY_LABEL[p.category] + ' · POC: ' + p.poc + '</div></div>' +
+        '<div class="ut-countdown"><div class="ut-t ' + cls + '">' + countdownLabel + '</div><div class="ut-date">' + fmtDate(p.goLive) + '</div></div>' +
+      '</div>';
+    }).join('') || '<div class="empty" style="padding:20px;">No upcoming go-lives scheduled</div>';
+    lucide.createIcons();
+  }
+
+  function setHomeTaskRange(range) {
+    homeTaskRange = range;
+    document.querySelectorAll('.home-tasks-tab').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+    renderHomeTasks();
+  }
+
+  // BACKEND: AOS_API.tasks.listForUser(currentUserId, range) → GET /api/tasks?userId=&range=
+  function renderHomeTasks() {
+    const container = document.getElementById('homeTaskList');
+    loadInto(
+      container,
+      () => AOS_API.tasks.listForUser(currentUserEmail, homeTaskRange),
+      (list) => {
+        HOME_TASKS_CACHE = list;
+        container.innerHTML = list.map(t => (
+          '<div class="task-mini-item" data-task-id="' + t.id + '" data-action="openTaskFromList">' +
+            '<div class="task-mini-left"><div class="mini-avatar">' + (t.initial || initialsOf(t.assignee || '?')) + '</div>' +
+            '<div><div class="task-mini-title">' + t.title + '</div><div class="task-mini-meta">' + t.project + '</div></div></div>' +
+            '<span class="' + (homeTaskRange==='today' ? 'due-today' : 'subtle') + '">' + (homeTaskRange==='today' ? 'Due today' : (t.due || '')) + '</span>' +
+          '</div>'
+        )).join('');
+      },
+      { loadingLabel: 'Loading tasks…', emptyLabel: 'Nothing here right now' }
+    );
+  }
+  // Click handler for a home-task-list item — looks the task back up from the
+  // last-loaded list. Since loadInto doesn't cache, keep a side cache here.
+  let HOME_TASKS_CACHE = [];
+  function openTaskFromList(taskId) {
+    const t = HOME_TASKS_CACHE.find(x => String(x.id) === String(taskId));
+    if (t) openReminder(t.title, t.project, t.assignee);
+  }
+
+  function openHealthModal(filterKey) {
+    const title = filterKey ? (HEALTH_LABEL[filterKey] + ' Projects') : 'Projects — Overall Health';
+    document.getElementById('healthModalTitle').textContent = title;
+    const list = filterKey ? PROJECTS.filter(p => p.health === filterKey) : PROJECTS;
+    document.getElementById('healthModalBody').innerHTML = list.map(p => (
+      '<div class="clickable-row" style="display:flex; justify-content:space-between; align-items:center; padding:10px 8px;" data-project-id="' + p.id + '" data-action="openProjectFromHealthModal" data-arg="' + p.id + '">' +
+        '<div><div class="proj-name">' + p.name + '</div><div class="subtle">' + CATEGORY_LABEL[p.category] + ' · POC: ' + p.poc + '</div></div>' +
+        '<span class="pill ' + HEALTH_PILL_CLASS[p.health] + '"><span class="pill-dot"></span>' + HEALTH_LABEL[p.health] + '</span>' +
+      '</div>'
+    )).join('') || '<div class="empty" style="padding:20px;">No projects in this bucket yet</div>';
+    openModal('healthModal');
+    renderHealthDonut();
+  }
+
+  function openProjectFromHealthModal(id) { closeModal('healthModal'); openProject(id); }
+
+  function renderHealthDonut() {
+    const svg = document.getElementById('healthDonut');
+    if (!svg) return;
+    const counts = { active:0, completed:0, delayed:0, awaiting:0 };
+    PROJECTS.forEach(p => { counts[p.health] = (counts[p.health]||0) + 1; });
+    const total = PROJECTS.length || 1;
+    const colors = { active:'#3B82F6', completed:'var(--success)', delayed:'var(--danger)', awaiting:'var(--warning)' };
+    let offset = 0;
+    let circles = '<circle cx="21" cy="21" r="15.9" fill="transparent" stroke="var(--border)" stroke-width="6"/>';
+    ['active','completed','delayed','awaiting'].forEach(key => {
+      const pct = Math.round((counts[key] / total) * 100);
+      if (pct > 0) {
+        circles += '<circle cx="21" cy="21" r="15.9" fill="transparent" stroke="' + colors[key] + '" stroke-width="6" stroke-dasharray="' + pct + ' ' + (100-pct) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 21 21)"/>';
+        offset += pct;
+      }
+    });
+    svg.innerHTML = circles;
+  }
+
+  /* =========================================================
+     PROJECTS — hub, category list, filter, detail, edit
+  ========================================================= */
+  function renderCatHub() {
+    const grid = document.getElementById('catHubGrid');
+    grid.innerHTML = Object.keys(CATEGORY_LABEL).map(cat => {
+      const count = PROJECTS.filter(p => p.category === cat && p.health !== 'completed').length;
+      return '<div class="cat-hub-card" data-category-id="' + cat + '" data-action="openCategory" data-arg="' + cat + '">' +
+        '<div class="cat-count">' + count + '</div>' +
+        '<div class="cat-name">' + CATEGORY_LABEL[cat] + '</div>' +
+        '<div class="subtle">' + count + ' active project' + (count===1?'':'s') + ' in this category</div>' +
+      '</div>';
+    }).join('');
+    lucide.createIcons();
+  }
+
+  function openCategory(cat, fromBack) {
+    currentCategory = cat;
+    document.getElementById('catTitle').textContent = CATEGORY_LABEL[cat];
+    const catProjects = PROJECTS.filter(p => p.category === cat && p.health !== 'completed');
+    document.getElementById('catSubtitle').textContent = catProjects.length + ' active project' + (catProjects.length===1?'':'s') + ' · tap any project to open its full detail view · completed projects have moved to Completed Projects';
+    const brandPocs = [...new Set(catProjects.map(p => p.brandPoc).filter(Boolean).filter(x => x !== '—'))].sort();
+    const ft22Pocs = [...new Set(catProjects.map(p => p.poc).filter(Boolean).filter(x => x !== '—'))].sort();
+    document.getElementById('brandPocFilter').innerHTML = '<option value="">All Brand POCs</option>' + brandPocs.map(poc => '<option value="' + poc.replace(/"/g,'&quot;') + '">' + poc + '</option>').join('');
+    document.getElementById('poc22ftFilter').innerHTML = '<option value="">All 22FT POCs</option>' + ft22Pocs.map(poc => '<option value="' + poc.replace(/"/g,'&quot;') + '">' + poc + '</option>').join('');
+    // reset filter/sort state for the new category
+    catBrandPocFilter = ''; cat22ftPocFilter = ''; catSortField = null; catSortDir = 'asc';
+    document.getElementById('brandPocFilter').value = '';
+    document.getElementById('poc22ftFilter').value = '';
+    document.querySelectorAll('.sort-option').forEach(b => b.classList.remove('active','desc'));
+    showScreen('project-category');
+    document.querySelectorAll('.nav-sub-item[data-cat]').forEach(n => n.classList.toggle('active', n.dataset.cat === cat));
+    renderCategoryList();
+    navTo([crumbScreen('projects-hub'), crumbCategory(cat)], fromBack);
+  }
+
+  function toggleFilterPanel(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('filterPanel').classList.toggle('show');
+  }
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('filterPanel');
+    if (panel && !e.target.closest('#filterPanel') && !e.target.closest('#filterByBtn')) panel.classList.remove('show');
+  });
+
+  function setCatBrandPocFilter(v) { catBrandPocFilter = v; renderCategoryList(); }
+  function setCat22ftPocFilter(v) { cat22ftPocFilter = v; renderCategoryList(); }
+
+  function toggleCatSort(field) {
+    if (catSortField === field) {
+      catSortDir = catSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      catSortField = field;
+      catSortDir = 'asc';
+    }
+    document.querySelectorAll('.sort-option').forEach(b => b.classList.remove('active','desc'));
+    const btn = document.getElementById('sortOpt-' + field);
+    if (btn) { btn.classList.add('active'); if (catSortDir === 'desc') btn.classList.add('desc'); }
+    renderCategoryList();
+  }
+
+  function clearCatFilters() {
+    catBrandPocFilter = ''; cat22ftPocFilter = ''; catSortField = null; catSortDir = 'asc';
+    document.getElementById('brandPocFilter').value = '';
+    document.getElementById('poc22ftFilter').value = '';
+    document.querySelectorAll('.sort-option').forEach(b => b.classList.remove('active','desc'));
+    renderCategoryList();
+  }
+
+  function renderCategoryList() {
+    let list = PROJECTS.filter(p => p.category === currentCategory && p.health !== 'completed');
+    if (catBrandPocFilter) list = list.filter(p => p.brandPoc === catBrandPocFilter);
+    if (cat22ftPocFilter) list = list.filter(p => p.poc === cat22ftPocFilter);
+    if (catSortField) {
+      list = list.slice().sort((a, b) => {
+        const da = new Date(a[catSortField] + 'T00:00:00'); const db = new Date(b[catSortField] + 'T00:00:00');
+        const va = isNaN(da) ? 0 : da.getTime(); const vb = isNaN(db) ? 0 : db.getTime();
+        return catSortDir === 'asc' ? va - vb : vb - va;
+      });
+    }
+    const summary = document.getElementById('activeFilterSummary');
+    if (summary) {
+      const bits = [];
+      if (catBrandPocFilter) bits.push('Brand POC: ' + catBrandPocFilter);
+      if (cat22ftPocFilter) bits.push('22FT POC: ' + cat22ftPocFilter);
+      if (catSortField) bits.push('Sorted by ' + (catSortField === 'goLive' ? 'go-live date' : 'start date') + ' (' + (catSortDir === 'asc' ? 'ascending' : 'descending') + ')');
+      summary.textContent = bits.join(' · ');
+    }
+    const container = document.getElementById('catProjectList');
+    container.innerHTML = list.map(p => (
+      '<div class="proj-h-card" data-project-id="' + p.id + '" data-action="openProject" data-arg="' + p.id + '">' +
+        '<div class="proj-h-name">' + p.name + '</div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">Brand POC</div><div class="proj-h-value">' + p.brandPoc + '</div></div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">22FT POC</div><div class="proj-h-value">' + p.poc + '</div></div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">Go-Live</div><div class="proj-h-value">' + fmtDate(p.goLive) + '</div></div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">Assignees</div><div class="proj-h-avatars">' + p.assignees.map(a => '<div class="mini-avatar" title="'+a+'">' + initialsOf(a) + '</div>').join('') + '</div></div>' +
+        '<span class="pill ' + HEALTH_PILL_CLASS[p.health] + '"><span class="pill-dot"></span>' + HEALTH_LABEL[p.health] + '</span>' +
+      '</div>'
+    )).join('') || '<div class="empty">No projects match this filter</div>';
+  }
+
+  /* =========================================================
+     ARCHIVED POSTS — completed projects, shifted out of the
+     active Projects category lists
+  ========================================================= */
+  function renderArchives(filterKey) {
+    filterKey = filterKey || (document.querySelector('.archive-tab.active') ? document.querySelector('.archive-tab.active').dataset.arch : 'all');
+    const list = PROJECTS.filter(p => p.health === 'completed' && (filterKey === 'all' || p.category === filterKey));
+    const container = document.getElementById('archiveList');
+    if (!container) return;
+    container.innerHTML = list.map(p => (
+      '<div class="proj-h-card" data-project-id="' + p.id + '" data-action="openProject" data-arg="' + p.id + '">' +
+        '<div class="proj-h-name">' + p.name + '</div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">Category</div><div class="proj-h-value">' + CATEGORY_LABEL[p.category] + '</div></div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">Brand POC</div><div class="proj-h-value">' + p.brandPoc + '</div></div>' +
+        '<div class="proj-h-col"><div class="proj-h-label">Completed</div><div class="proj-h-value">' + fmtDate(p.goLive) + '</div></div>' +
+        '<span class="pill pill-completed"><span class="pill-dot"></span>Completed</span>' +
+      '</div>'
+    )).join('') || '<div class="empty">No archived projects in this bucket yet</div>';
+  }
+  document.querySelectorAll('.archive-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.archive-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderArchives(tab.dataset.arch);
+    });
+  });
+
+  function openProject(id, fromBack) {
+    currentProjectId = id;
+    renderProjectDetail(id);
+    showScreen('project-detail');
+    const p = projectById(id);
+    if (p) {
+      navTo([crumbScreen('projects-hub'), crumbCategory(p.category), crumbProject(p)], fromBack);
+    } else {
+      navTo([crumbScreen('projects-hub')], fromBack);
+    }
+  }
+
+  function backFromProjectDetail() {
+    const p = projectById(currentProjectId);
+    if (p) { openCategory(p.category); } else { navScreen('projects-hub'); }
+  }
+
+  function renderProjectDetail(id) {
+    const p = projectById(id);
+    if (!p) return;
+    document.getElementById('pdCategoryLabel').textContent = CATEGORY_LABEL[p.category];
+    document.getElementById('pdName').textContent = p.name;
+    document.getElementById('pdInit').textContent = fmtDate(p.initiation);
+    document.getElementById('pdGoLive').textContent = fmtDate(p.goLive);
+    document.getElementById('pdEffort').textContent = fmtRupees(p.effort);
+    document.getElementById('pdPoc').textContent = p.poc || '—';
+    document.getElementById('pdAssignees').innerHTML = p.assignees.map(a =>
+      '<span class="pill"><span class="mini-avatar" style="margin-right:2px;">' + initialsOf(a) + '</span>' + a + '</span>'
+    ).join('') || '<span class="subtle">No assignees yet</span>';
+
+    const band = progressBand(p.progress);
+    const fill = document.getElementById('pdProgressFill');
+    fill.style.width = p.progress + '%';
+    fill.className = 'progress-fill ' + band;
+    document.getElementById('pdProgressPct').textContent = p.progress + '%';
+    const chip = document.getElementById('pdStageChip');
+    chip.textContent = stageLabel(p.progress);
+    chip.className = 'stage-chip ' + band;
+
+    const stagePill = document.getElementById('pdStagePill');
+    stagePill.innerHTML = '<span class="pill-dot"></span>' + stageLabel(p.progress);
+    stagePill.className = 'pill ' + HEALTH_PILL_CLASS[p.health];
+
+    document.getElementById('pdEditBtn').style.display = canEditProjects() ? 'inline-flex' : 'none';
+    lucide.createIcons();
+
+    renderProjectTasks(id);
+    renderProjectApprovals(id);
+    renderProjectComments(id);
+  }
+
+  const TASK_STATUS_LABEL = { todo:'To Do', inprogress:'In Progress', inreview:'In Review', done:'Done' };
+  const PRIORITY_COLOR_VAR = { Low:'var(--text-secondary)', Medium:'var(--text-primary)', High:'var(--warning)', Urgent:'var(--danger)' };
+  let TASKS_CACHE = [];
+
+  function taskCardHtml(t) {
+    return '<div class="task-card" data-task-id="' + t.id + '" data-action="openTaskDetail" data-arg="' + t.id + '">' +
+      '<div class="task-priority"><span class="task-priority-dot" style="background:' + (PRIORITY_COLOR_VAR[t.priority] || PRIORITY_COLOR_VAR.Medium) + ';"></span>' + (t.priority || 'Medium') + '</div>' +
+      '<div class="task-title">' + t.title + '</div>' +
+      '<div class="task-foot"><span>' + (t.due ? fmtDate(t.due) : '') + '</span><div class="mini-avatar">' + initialsOf(t.assignee || '?') + '</div></div>' +
+    '</div>';
+  }
+
+  // BACKEND: AOS_API.tasks.listForProject(projectId) → GET /api/projects/:projectId/tasks
+  function renderProjectTasks(projectId) {
+    const board = document.getElementById('taskBoard');
+    board.dataset.projectId = projectId;
+    loadInto(
+      board,
+      () => AOS_API.tasks.listForProject(projectId),
+      (list) => {
+        TASKS_CACHE = list;
+        // Re-render columns since loadInto replaced the whole container's innerHTML on loading/error.
+        board.innerHTML =
+          '<div class="col" data-status="todo"><div class="col-head">To Do<span data-count-for="todo"></span></div><div data-cards-for="todo"></div></div>' +
+          '<div class="col" data-status="inprogress"><div class="col-head">In Progress<span data-count-for="inprogress"></span></div><div data-cards-for="inprogress"></div></div>' +
+          '<div class="col" data-status="inreview"><div class="col-head">In Review<span data-count-for="inreview"></span></div><div data-cards-for="inreview"></div></div>' +
+          '<div class="col" data-status="done"><div class="col-head">Done<span data-count-for="done"></span></div><div data-cards-for="done"></div></div>';
+        Object.keys(TASK_STATUS_LABEL).forEach(status => {
+          const inStatus = list.filter(t => t.status === status);
+          board.querySelector('[data-count-for="' + status + '"]').textContent = inStatus.length;
+          board.querySelector('[data-cards-for="' + status + '"]').innerHTML = inStatus.map(taskCardHtml).join('');
+        });
+      },
+      { loadingLabel: 'Loading tasks…', emptyLabel: 'No tasks on this project yet', allowEmptyRender: false }
+    );
+  }
+  function openTaskDetail(taskId) {
+    const t = TASKS_CACHE.find(x => String(x.id) === String(taskId)) || MY_TASKS_CACHE.find(x => String(x.id) === String(taskId));
+    if (t) openReminder(t.title, t.project || (projectById(currentProjectId) ? projectById(currentProjectId).name : ''), t.assignee);
+  }
+
+  // BACKEND: AOS_API.approvals.listForProject(projectId) → GET /api/projects/:projectId/approvals
+  function renderProjectApprovals(projectId) {
+    const container = document.getElementById('approvalsList');
+    container.dataset.projectId = projectId;
+    loadInto(
+      container,
+      () => AOS_API.approvals.listForProject(projectId),
+      (list) => {
+        container.innerHTML = list.map(a => (
+          '<div class="card" data-approval-id="' + a.id + '" style="margin-bottom:10px;">' +
+            '<div style="display:flex; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:8px;">' +
+              '<div><div style="font-weight:500;">' + a.title + '</div><div class="subtle">Version ' + a.version + ' · Requested ' + fmtDate(a.requestedAt) + '</div></div>' +
+              '<span style="color:var(--text-secondary); font-size:12px; display:flex; align-items:center; gap:6px;"><i data-lucide="clock" style="width:13px;height:13px;"></i>' + (a.status || 'Pending') + '</span>' +
+            '</div>' +
+            '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+              '<button type="button" class="btn btn-primary" data-action="decideApproval" data-arg="' + a.id + '" data-arg2="approved">Approve</button>' +
+              '<button type="button" class="btn btn-outline" data-action="decideApproval" data-arg="' + a.id + '" data-arg2="changes_requested">Request Changes</button>' +
+              '<button type="button" class="btn btn-outline" data-action="decideApproval" data-arg="' + a.id + '" data-arg2="rejected">Reject</button>' +
+            '</div>' +
+          '</div>'
+        )).join('');
+        lucide.createIcons();
+      },
+      { loadingLabel: 'Loading approvals…', emptyLabel: 'No approvals requested on this project yet' }
+    );
+  }
+  function decideApproval(approvalId, decision) {
+    AOS_API.approvals.decide(approvalId, decision)
+      .then(() => renderProjectApprovals(currentProjectId))
+      .catch(err => alert(err.message));
+  }
+
+  // BACKEND: AOS_API.comments.listForProject(projectId) → GET /api/projects/:projectId/comments
+  function renderProjectComments(projectId) {
+    const container = document.getElementById('commentsList');
+    container.dataset.projectId = projectId;
+    loadInto(
+      container,
+      () => AOS_API.comments.listForProject(projectId),
+      (list) => {
+        container.innerHTML = list.map(c => (
+          '<div class="comment" data-comment-id="' + c.id + '" style="background:var(--surface);">' +
+            '<div class="comment-head"><div class="mini-avatar" style="width:24px;height:24px;font-size:10px;">' + initialsOf(c.author) + '</div><b>' + c.author + '</b>' +
+              (!c.visibleToClient ? '<span class="badge-internal"><i data-lucide="lock" style="width:9px;height:9px;"></i>Internal</span>' : '') +
+              '<span class="subtle" style="font-size:11px;">' + fmtDate(c.createdAt) + '</span></div>' +
+            '<p style="margin:0;">' + c.body + '</p>' +
+          '</div>'
+        )).join('');
+        lucide.createIcons();
+      },
+      { loadingLabel: 'Loading comments…', emptyLabel: 'No comments yet — be the first to add one' }
+    );
+  }
+  function submitComment() {
+    const body = document.getElementById('newCommentBody').value.trim();
+    if (!body) return;
+    const visibleToClient = document.getElementById('newCommentVisibleToClient').checked;
+    AOS_API.comments.create(currentProjectId, { body, visibleToClient })
+      .then(() => {
+        document.getElementById('newCommentBody').value = '';
+        document.getElementById('newCommentVisibleToClient').checked = false;
+        renderProjectComments(currentProjectId);
+      })
+      .catch(err => alert(err.message));
+  }
+
+  function openEditProject() {
+    const p = projectById(currentProjectId);
+    if (!p || !canEditProjects()) { alert('Only Admin and Project Manager roles can edit a project.'); return; }
+    document.getElementById('epName').value = p.name;
+    document.getElementById('epPoc').value = p.poc;
+    document.getElementById('epInit').value = p.initiation && p.initiation !== '—' ? p.initiation : '';
+    document.getElementById('epGoLive').value = p.goLive && p.goLive !== '—' ? p.goLive : '';
+    document.getElementById('epEffort').value = p.effort || 0;
+    document.getElementById('epAssignees').value = p.assignees.join(', ');
+    document.getElementById('epProgress').value = p.progress;
+    document.getElementById('epProgressVal').textContent = p.progress + '%';
+    document.getElementById('epHealth').value = p.health;
+    openModal('editProjectModal');
+  }
+
+  // BACKEND: AOS_API.projects.update(projectId, payload) → PUT /api/projects/:id
+  function saveEditProject() {
+    const p = projectById(currentProjectId);
+    const form = document.getElementById('editProjectForm');
+    if (!p || !form.reportValidity()) return;
+    const payload = {
+      name: document.getElementById('epName').value.trim() || p.name,
+      poc: document.getElementById('epPoc').value.trim() || p.poc,
+      initiation: document.getElementById('epInit').value || p.initiation,
+      goLive: document.getElementById('epGoLive').value || p.goLive,
+      effort: Number(document.getElementById('epEffort').value) || 0,
+      assignees: document.getElementById('epAssignees').value.split(',').map(s=>s.trim()).filter(Boolean),
+      progress: Number(document.getElementById('epProgress').value),
+      health: document.getElementById('epHealth').value
+    };
+    AOS_API.projects.update(p.id, payload).then(() => {
+      Object.assign(p, payload);
+      closeModal('editProjectModal');
+      renderProjectDetail(p.id);
+      renderHomeKpis();
+      renderCatHub();
+    }).catch(err => alert(err.message));
+  }
+
+  /* ===== Task hover popover (My Tasks page) ===== */
+  const taskPopover = document.getElementById('taskPopover');
+  function findCachedTask(taskId) {
+    return TASKS_CACHE.find(x => String(x.id) === String(taskId)) || MY_TASKS_CACHE.find(x => String(x.id) === String(taskId));
+  }
+  document.getElementById('screen-mytasks').addEventListener('mousemove', (e) => {
+    const card = e.target.closest('.task-card');
+    if (!card) { taskPopover.classList.remove('show'); return; }
+    const t = findCachedTask(card.dataset.taskId) || {};
+    document.getElementById('tpTitle').textContent = t.title || '';
+    document.getElementById('tpProject').textContent = t.project || '';
+    document.getElementById('tpDeadline').textContent = t.due ? fmtDate(t.due) : '';
+    document.getElementById('tpAssignee').textContent = t.assignee || '';
+    document.getElementById('tpAssignedby').textContent = t.assignedBy || '';
+    document.getElementById('tpTeam').textContent = t.team || '';
+    const px = Math.min(e.clientX + 16, window.innerWidth - 280);
+    const py = Math.min(e.clientY + 16, window.innerHeight - 200);
+    taskPopover.style.left = px + 'px';
+    taskPopover.style.top = py + 'px';
+    taskPopover.classList.add('show');
+  });
+  document.getElementById('screen-mytasks').addEventListener('mouseleave', () => taskPopover.classList.remove('show'), true);
+
+  /* =========================================================
+     MEMBERS — directory table + team drill-down
+  ========================================================= */
+  function deptInitials(name) {
+    return name.replace('22FT - ', '').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+  }
+
+  let directorySortMode = 'az';
+
+  function setDirectorySort(mode) {
+    directorySortMode = mode;
+    document.querySelectorAll('.dir-sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === mode));
+    renderDirectory();
+  }
+
+  function directoryRowHtml(x) {
+    return '<div class="row" data-member-id="' + x.name + '" style="grid-template-columns:1fr 140px 140px 100px;">' +
+      '<div><div class="proj-name">' + x.name + '</div><div class="subtle">' + x.m.email + '</div></div>' +
+      '<span class="subtle">' + x.m.position + '</span>' +
+      '<span class="subtle">' + x.dept + '</span>' +
+      '<span class="subtle">Active</span>' +
+    '</div>';
+  }
+
+  function renderDirectory() {
+    const entries = Object.keys(MEMBER_DIRECTORY).map(name => ({
+      name, m: MEMBER_DIRECTORY[name],
+      dept: Object.keys(departments).find(d => departments[d].includes(name)) || '—'
+    }));
+    const target = document.getElementById('directoryRows');
+    if (!entries.length) { renderEmpty(target, 'No members in the directory yet'); return; }
+    let html;
+    if (directorySortMode === 'team') {
+      const byDept = {};
+      entries.forEach(x => { (byDept[x.dept] = byDept[x.dept] || []).push(x); });
+      html = Object.keys(byDept).sort().map(dept => {
+        const rows = byDept[dept].sort((a, b) => a.name.localeCompare(b.name)).map(directoryRowHtml).join('');
+        return '<div class="dir-team-header">' + dept + '</div>' + rows;
+      }).join('');
+    } else {
+      html = entries.sort((a, b) => a.name.localeCompare(b.name)).map(directoryRowHtml).join('');
+    }
+    target.innerHTML = html;
+  }
+
+  function renderBento() {
+    const grid = document.getElementById('bentoGrid');
+    if (!grid) return;
+    grid.innerHTML = Object.keys(departments).map(dept => {
+      const count = departments[dept].length;
+      return '<div class="bento-card" data-team-id="' + dept + '" data-action="openDeptModal" data-arg="' + dept + '">' +
+        '<div class="dept-icon">' + deptInitials(dept) + '</div>' +
+        '<div class="dept-name">' + dept + '</div>' +
+        '<div class="subtle">' + count + ' member' + (count === 1 ? '' : 's') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ===== Sync with Outlook/Teams ===== */
+  // BACKEND: AOS_API.graph.startContactImport() → POST /api/integrations/graph/contacts/import
+  function startGraphImport() {
+    const status = document.getElementById('graphImportStatus');
+    status.style.display = 'flex';
+    status.innerHTML = '<i data-lucide="loader-2" style="animation:spin 1s linear infinite;"></i>Connecting to Microsoft Graph…';
+    lucide.createIcons();
+    AOS_API.graph.startContactImport()
+      .then(() => { status.innerHTML = '<i data-lucide="check-circle-2"></i>Import started.'; lucide.createIcons(); loadMembersData(); })
+      .catch(err => { status.innerHTML = '<i data-lucide="alert-triangle"></i>' + err.message; lucide.createIcons(); });
+  }
+
+  // BACKEND: AOS_API.graph.importFromFile(file) → multipart upload, parsed server-side
+  function handleContactFileSelect(input) {
+    const status = document.getElementById('fileImportStatus');
+    const file = input.files && input.files[0];
+    status.style.display = 'flex';
+    if (!file) { status.innerHTML = '<i data-lucide="alert-triangle"></i>No file selected.'; lucide.createIcons(); return; }
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['csv','xls','xlsx'].includes(ext)) {
+      status.innerHTML = '<i data-lucide="alert-triangle"></i>Please choose a .csv, .xls or .xlsx file.';
+      lucide.createIcons();
+      return;
+    }
+    status.innerHTML = '<i data-lucide="loader-2" style="animation:spin 1s linear infinite;"></i>Uploading ' + file.name + '…';
+    lucide.createIcons();
+    AOS_API.graph.importFromFile(file)
+      .then(() => { status.innerHTML = '<i data-lucide="check-circle-2"></i>Import queued.'; lucide.createIcons(); loadMembersData(); })
+      .catch(err => { status.innerHTML = '<i data-lucide="alert-triangle"></i>' + err.message; lucide.createIcons(); });
+  }
+
+  /* ===== Invite ===== */
+  function populateInviteDeptOptions() {
+    const sel = document.getElementById('inviteDept');
+    if (!sel) return;
+    sel.innerHTML = Object.keys(departments).map(d => '<option value="' + d.replace(/"/g,'&quot;') + '">' + d + '</option>').join('');
+  }
+
+  // BACKEND: AOS_API.graph.sendInviteMail(payload) → POST /api/integrations/mail/send (Graph sendMail)
+  function sendInviteViaOutlook() {
+    const name = document.getElementById('inviteName').value.trim();
+    const email = document.getElementById('inviteEmail').value.trim();
+    const status = document.getElementById('inviteStatus');
+    status.style.display = 'flex';
+    if (!email) { status.innerHTML = '<i data-lucide="alert-triangle"></i>Add an email address first.'; lucide.createIcons(); return; }
+    AOS_API.graph.sendInviteMail({ name, email }).catch(() => { /* falls back to mailto below until the backend route exists */ });
+    const subject = encodeURIComponent('You\'re invited to AOS');
+    const body = encodeURIComponent('Hi ' + (name || 'there') + ',\n\nYou\'ve been invited to join the AOS workspace. Follow the link below to set up your account.\n\n(Invite link goes here once account provisioning is wired up.)\n\n— AOS');
+    // Opens the signed-in user's default mail client (Outlook, if set as default) with a
+    // pre-filled invite, until AOS_API.graph.sendInviteMail is implemented server-side.
+    window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
+    status.innerHTML = '<i data-lucide="check-circle-2"></i>Handing off to your mail client. Wire up Graph\'s sendMail API to send this without leaving AOS.';
+    lucide.createIcons();
+  }
+
+  // BACKEND: AOS_API.members.invite(payload) → POST /api/members/invite (creates the member record;
+  // sending the actual email is handled separately via AOS_API.graph.sendInviteMail)
+  function addInvitedMember() {
+    const form = document.getElementById('inviteForm');
+    if (!form.reportValidity()) return;
+    const name = document.getElementById('inviteName').value.trim();
+    const email = document.getElementById('inviteEmail').value.trim();
+    const dept = document.getElementById('inviteDept').value;
+    const role = document.getElementById('inviteRole').value;
+    AOS_API.members.invite({ name, email, teamId: dept, role }).then(() => {
+      if (!departments[dept]) departments[dept] = [];
+      if (!departments[dept].includes(name)) departments[dept].push(name);
+      MEMBER_DIRECTORY[name] = { position: role, email: email, phone: '—' };
+      renderDirectory();
+      renderBento();
+      closeModal('inviteModal');
+      form.reset();
+      document.getElementById('inviteStatus').style.display = 'none';
+    }).catch(err => alert(err.message));
+  }
+
+  function renderDeptModalBody(dept) {
+    const members = departments[dept] || [];
+    let html = members.map(m => {
+      const info = MEMBER_DIRECTORY[m] || { position:'—', email:'—', phone:'—' };
+      return '<tr data-member-id="' + m + '"><td>' + m + (isAdminRole() ? ' <button type="button" class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 8px;font-size:10px;" data-action="removeMember" data-arg="' + dept + '" data-arg2="' + m + '"><i data-lucide="user-minus" style="width:11px;height:11px;"></i></button>' : '') + '</td>' +
+        '<td>' + info.position + '</td><td>' + info.email + '</td><td>' + info.phone + '</td></tr>';
+    }).join('');
+    if (!members.length) html = '<tr><td colspan="4" class="subtle" style="padding:12px 0;">No members yet.</td></tr>';
+    document.getElementById('deptModalBody').innerHTML = html;
+    document.getElementById('deptModalBody').closest('.modal-body').dataset.teamId = dept;
+    document.getElementById('deptModalFoot').innerHTML = isAdminRole()
+      ? '<span class="admin-badge" style="margin-right:auto;"><i data-lucide="shield-check" style="width:11px;height:11px;"></i>Admin controls</span>' +
+        '<button type="button" class="btn btn-primary" data-action="addMember" data-arg="' + dept + '"><i data-lucide="user-plus"></i>Add member</button>'
+      : '<span class="subtle">Only Admin-role members can add or remove team members.</span>';
+    lucide.createIcons();
+  }
+
+  function openDeptModal(dept) {
+    document.getElementById('deptModalTitle').textContent = dept;
+    renderDeptModalBody(dept);
+    openModal('deptModal');
+  }
+
+  // BACKEND: AOS_API.members.addToTeam(teamId, { name }) → POST /api/teams/:id/members
+  function addMember(dept) {
+    const name = prompt('Add a member to ' + dept + ':');
+    if (name && name.trim()) {
+      AOS_API.members.addToTeam(dept, { name: name.trim() }).catch(() => {});
+      departments[dept].push(name.trim());
+      if (!MEMBER_DIRECTORY[name.trim()]) MEMBER_DIRECTORY[name.trim()] = { position:'—', email:'—', phone:'—' };
+      renderDeptModalBody(dept);
+      renderBento();
+    }
+  }
+
+  // BACKEND: AOS_API.members.removeFromTeam(teamId, memberId) → DELETE /api/teams/:id/members/:memberId
+  function removeMember(dept, name) {
+    AOS_API.members.removeFromTeam(dept, name).catch(() => {});
+    departments[dept] = departments[dept].filter(m => m !== name);
+    renderDeptModalBody(dept);
+    renderBento();
+  }
+
+  /* ===== Reports: Work Ownership (renamed from Team Workload) ===== */
+  const OWNERSHIP_COLORS = ['#C8102E','#3B82F6','#1A8654','#B7791F','#8C0B21','#6B4EFF','#2A2C30','#E0A63B','#0EA5A5'];
+
+  function renderOrgWorkOwnership() {
+    const stack = document.getElementById('ownershipStack');
+    const legend = document.getElementById('ownershipLegend');
+    if (!stack || !legend) return;
+    // Each team's total open-work units (sum of its members' load points),
+    // normalized across every team so the whole organization adds up to 100%.
+    const teamTotals = Object.keys(workload).map(dept => ({
+      dept,
+      total: workload[dept].reduce((s, [,pct]) => s + pct, 0)
+    }));
+    const grandTotal = teamTotals.reduce((s, t) => s + t.total, 0) || 1;
+    let segHtml = '', legendHtml = '', running = 0;
+    teamTotals.forEach((t, i) => {
+      const share = Math.round((t.total / grandTotal) * 1000) / 10; // one decimal
+      const color = OWNERSHIP_COLORS[i % OWNERSHIP_COLORS.length];
+      segHtml += '<div class="ownership-seg" data-report-id="' + t.dept + '" style="width:' + share + '%; background:' + color + ';" title="' + t.dept + ' — ' + share + '%"></div>';
+      legendHtml += '<span data-report-id="' + t.dept + '"><span class="oleg-dot" style="background:' + color + ';"></span>' + t.dept + ' ' + share + '%</span>';
+      running += share;
+    });
+    stack.innerHTML = segHtml;
+    legend.innerHTML = legendHtml + '<span style="font-weight:600;">Total: ' + Math.round(running) + '%</span>';
+  }
+
+  function renderWorkloadDeptList() {
+    const list = document.getElementById('workloadDeptList');
+    if (!list) return;
+    list.innerHTML = Object.keys(workload).map(dept => {
+      const total = workload[dept].reduce((s, [,pct]) => s + pct, 0) / workload[dept].length;
+      return '<div class="clickable-row" data-team-id="' + dept + '" data-action="openWorkloadDept" data-arg="' + dept + '" style="padding:8px;">' +
+        '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;"><span>' + dept + '</span><span class="subtle">' + Math.round(total) + '% avg load</span></div>' +
+        '<div style="background:var(--border); border-radius:99px; height:6px;"><div style="width:' + Math.round(total) + '%; height:100%; background:var(--accent); border-radius:99px;"></div></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function openWorkloadDept(dept, fromBack) {
+    document.getElementById('workloadDeptTitle').textContent = dept + ' — Work Ownership';
+    const rows = workload[dept] || [];
+    document.getElementById('workloadDeptBody').innerHTML = rows.map(([name, pct]) =>
+      '<div style="margin-bottom:14px;"><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;"><span>' + name + '</span><span>' + pct + '%</span></div>' +
+      '<div style="background:var(--border); border-radius:99px; height:8px;"><div style="width:' + pct + '%; height:100%; background:var(--accent); border-radius:99px;"></div></div></div>'
+    ).join('') + '<p class="subtle" style="margin-top:8px;">Ownership is expressed as a share of ' + dept + '\'s open task capacity, split across its members, adding up to 100%.</p>';
+    showScreen('workload-detail');
+    navTo([crumbScreen('reports'), crumbWorkload(dept)], fromBack);
+  }
+
+  /* =========================================================
+     FINANCE
+  ========================================================= */
+  function toggleFinanceStatus(projId, process) {
+    const current = financeState[projId][process];
+    financeState[projId][process] = current === 'Initiated' ? 'Closed' : 'Initiated';
+    renderFinance();
+  }
+
+  function renderFinance() {
+    const container = document.getElementById('financeBody');
+    let html = '';
+    Object.keys(CATEGORY_LABEL).forEach(cat => {
+      const projs = PROJECTS.filter(p => p.category === cat);
+      if (!projs.length) return;
+      html += '<div class="finance-cat-title">' + CATEGORY_LABEL[cat] + '</div>';
+      html += '<div class="row-list" style="margin-top:8px; margin-bottom:8px;">';
+      html += '<div class="finance-row finance-row-head"><span>Project</span><span>SOW</span><span>Estimate Request</span><span>JCR</span></div>';
+      projs.forEach(p => {
+        const state = financeState[p.id] || { 'SOW':'Initiated', 'Estimate Request':'Initiated', 'JCR':'Initiated' };
+        html += '<div class="finance-row" data-project-id="' + p.id + '">' +
+          '<span class="proj-name">' + p.name + '</span>' +
+          FINANCE_PROCESSES.map(proc => (
+            '<select class="finance-select ' + (state[proc]==='Closed'?'closed':'initiated') + '" name="finance-' + p.id + '-' + proc + '" data-change-action="setFinanceStatus" data-arg="' + p.id + '" data-arg2="' + proc + '">' +
+              '<option ' + (state[proc]==='Initiated'?'selected':'') + '>Initiated</option>' +
+              '<option ' + (state[proc]==='Closed'?'selected':'') + '>Closed</option>' +
+            '</select>'
+          )).join('') +
+        '</div>';
+      });
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }
+  // BACKEND: AOS_API.finance.setStatus(projectId, process, status) → PUT /api/finance/:projectId/:process
+  function setFinanceStatus(projId, process, value) {
+    financeState[projId][process] = value;
+    AOS_API.finance.setStatus(projId, process, value).catch(() => {});
+    renderFinance();
+  }
+
+  /* =========================================================
+     ADMIN CMS
+     Generic CRUD screens for Clients / Agencies / Third Parties /
+     Brands / Teams / Members / Roles, plus two singleton settings
+     screens. One config object + one set of render/form functions
+     drives all seven CRUD resources.
+  ========================================================= */
+  let currentAdminTab = 'clients';
+  let ADMIN_CACHE = {};
+
+  const ADMIN_FIELD_CONFIG = {
+    clients:      { label:'Client',       idAttr:'data-client-id', columns:[['name','Name'],['primaryContact','Primary contact'],['status','Status']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'primaryContact', label:'Primary contact' },
+                      { name:'status', label:'Status', type:'select', options:['Active','Inactive'] }
+                    ] },
+    agencies:     { label:'Agency',       idAttr:'data-record-id', columns:[['name','Name'],['contactEmail','Contact email'],['status','Status']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'contactEmail', label:'Contact email', type:'email' },
+                      { name:'status', label:'Status', type:'select', options:['Active','Inactive'] }
+                    ] },
+    thirdParties: { label:'Third party',  idAttr:'data-record-id', columns:[['name','Name'],['serviceType','Service type'],['status','Status']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'serviceType', label:'Service type' },
+                      { name:'status', label:'Status', type:'select', options:['Active','Inactive'] }
+                    ] },
+    brands:       { label:'Brand',        idAttr:'data-record-id', columns:[['name','Name'],['clientName','Client'],['status','Status']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'clientId', label:'Client ID' },
+                      { name:'status', label:'Status', type:'select', options:['Active','Inactive'] }
+                    ] },
+    teams:        { label:'Team',         idAttr:'data-team-id',   columns:[['name','Name'],['memberCount','Members'],['status','Status']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'status', label:'Status', type:'select', options:['Active','Inactive'] }
+                    ] },
+    members:      { label:'Member',       idAttr:'data-member-id', columns:[['name','Name'],['email','Email'],['teamName','Team'],['role','Role']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'email', label:'Email', type:'email', required:true },
+                      { name:'teamId', label:'Team ID' },
+                      { name:'role', label:'Role' }
+                    ] },
+    roles:        { label:'Role',         idAttr:'data-role-id',   columns:[['name','Name'],['description','Description']], fields:[
+                      { name:'name', label:'Name', required:true },
+                      { name:'description', label:'Description', type:'textarea' }
+                    ] }
+  };
+
+  function showAdminTab(tab) {
+    currentAdminTab = tab;
+    document.querySelectorAll('#adminTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.adminTab === tab));
+    document.querySelectorAll('.admin-pane').forEach(p => p.style.display = 'none');
+    const pane = document.getElementById('admin-pane-' + tab);
+    if (pane) pane.style.display = 'block';
+    document.querySelectorAll('.nav-sub-item[data-admin-tab]').forEach(n => n.classList.toggle('active', n.dataset.adminTab === tab));
+    if (tab === 'orgSettings') loadOrgSettings();
+    else if (tab === 'msTenantSettings') loadMsTenantSettings();
+    else renderAdminList(tab);
+  }
+
+  // BACKEND: AOS_API.admin.<resource>.list() → GET /api/admin/<resource>
+  async function renderAdminList(resource) {
+    const tbody = document.querySelector('[data-admin-tbody="' + resource + '"]');
+    const config = ADMIN_FIELD_CONFIG[resource];
+    if (!tbody || !config) return;
+    const colCount = config.columns.length + 1;
+    tbody.innerHTML = '<tr><td colspan="' + colCount + '"><div class="state-box"><div class="state-spinner"></div><span>Loading ' + config.label.toLowerCase() + 's…</span></div></td></tr>';
+    try {
+      const list = await AOS_API.admin[resource].list() || [];
+      ADMIN_CACHE[resource] = list;
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="' + colCount + '"><div class="empty">No ' + config.label.toLowerCase() + 's yet — add the first one.</div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(row => adminRowHtml(resource, config, row)).join('');
+      lucide.createIcons();
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '"><div class="state-box state-error"><i data-lucide="alert-triangle"></i><span>' + (err.message || 'Failed to load') + '</span></div></td></tr>';
+      lucide.createIcons();
+    }
+  }
+
+  function adminRowHtml(resource, config, row) {
+    return '<tr ' + config.idAttr + '="' + row.id + '">' +
+      config.columns.map(([key]) => '<td>' + (row[key] != null && row[key] !== '' ? row[key] : '—') + '</td>').join('') +
+      '<td class="admin-row-actions">' +
+        '<button type="button" class="btn btn-outline btn-sm" data-action="openAdminEditForm" data-arg="' + resource + '" data-arg2="' + row.id + '"><i data-lucide="pencil"></i></button>' +
+        '<button type="button" class="btn btn-outline btn-sm" data-action="deleteAdminRecord" data-arg="' + resource + '" data-arg2="' + row.id + '"><i data-lucide="trash-2"></i></button>' +
+      '</td>' +
+    '</tr>';
+  }
+
+  function adminFormFieldsHtml(config, record) {
+    record = record || {};
+    return config.fields.map(f => {
+      const val = record[f.name] != null ? record[f.name] : '';
+      const id = 'adminField_' + f.name;
+      if (f.type === 'select') {
+        return '<div class="field"><label for="' + id + '">' + f.label + '</label><select id="' + id + '" name="' + f.name + '">' +
+          f.options.map(o => '<option value="' + o + '" ' + (o === val ? 'selected' : '') + '>' + o + '</option>').join('') + '</select></div>';
+      }
+      if (f.type === 'textarea') {
+        return '<div class="field"><label for="' + id + '">' + f.label + '</label><textarea id="' + id + '" name="' + f.name + '" rows="3">' + val + '</textarea></div>';
+      }
+      return '<div class="field"><label for="' + id + '">' + f.label + '</label><input type="' + (f.type || 'text') + '" id="' + id + '" name="' + f.name + '" value="' + val + '" ' + (f.required ? 'required' : '') + '></div>';
+    }).join('');
+  }
+
+  function openAdminCreateForm(resource) {
+    const config = ADMIN_FIELD_CONFIG[resource];
+    if (!config) return;
+    document.getElementById('adminFormModalTitle').textContent = 'Add ' + config.label.toLowerCase();
+    const form = document.getElementById('adminForm');
+    form.dataset.resource = resource;
+    form.dataset.recordId = '';
+    form.innerHTML = adminFormFieldsHtml(config, {});
+    openModal('adminFormModal');
+  }
+
+  function openAdminEditForm(resource, id) {
+    const config = ADMIN_FIELD_CONFIG[resource];
+    if (!config) return;
+    const record = (ADMIN_CACHE[resource] || []).find(r => String(r.id) === String(id)) || {};
+    document.getElementById('adminFormModalTitle').textContent = 'Edit ' + config.label.toLowerCase();
+    const form = document.getElementById('adminForm');
+    form.dataset.resource = resource;
+    form.dataset.recordId = id;
+    form.innerHTML = adminFormFieldsHtml(config, record);
+    openModal('adminFormModal');
+  }
+
+  // BACKEND: AOS_API.admin.<resource>.create/update → POST/PUT /api/admin/<resource>[/:id]
+  function submitAdminForm() {
+    const form = document.getElementById('adminForm');
+    const resource = form.dataset.resource;
+    const recordId = form.dataset.recordId;
+    if (!form.reportValidity()) return;
+    const payload = {};
+    new FormData(form).forEach((v, k) => { payload[k] = v; });
+    const promise = recordId ? AOS_API.admin[resource].update(recordId, payload) : AOS_API.admin[resource].create(payload);
+    promise.then(() => { closeModal('adminFormModal'); renderAdminList(resource); })
+      .catch(err => alert(err.message));
+  }
+
+  // BACKEND: AOS_API.admin.<resource>.remove(id) → DELETE /api/admin/<resource>/:id
+  function deleteAdminRecord(resource, id) {
+    const config = ADMIN_FIELD_CONFIG[resource];
+    if (!confirm('Delete this ' + config.label.toLowerCase() + '? This cannot be undone.')) return;
+    AOS_API.admin[resource].remove(id).then(() => renderAdminList(resource)).catch(err => alert(err.message));
+  }
+
+  // BACKEND: AOS_API.admin.orgSettings.get/update → GET/PUT /api/admin/org-settings
+  function loadOrgSettings() {
+    const form = document.getElementById('orgSettingsForm');
+    AOS_API.admin.orgSettings.get().then(s => {
+      if (!s) return;
+      form.orgName.value = s.orgName || '';
+      form.timezone.value = s.timezone || '';
+      form.workweekStart.value = s.workweekStart || 'mon';
+    }).catch(() => {});
+  }
+  function saveOrgSettings() {
+    const form = document.getElementById('orgSettingsForm');
+    const payload = { orgName: form.orgName.value, timezone: form.timezone.value, workweekStart: form.workweekStart.value };
+    AOS_API.admin.orgSettings.update(payload).then(() => alert('Organization settings saved.')).catch(err => alert(err.message));
+  }
+
+  // BACKEND: AOS_API.admin.msTenantSettings.get/update → GET/PUT /api/admin/ms-tenant-settings
+  // (client secret is never handled here — server-side only, e.g. Vercel env var)
+  function loadMsTenantSettings() {
+    const form = document.getElementById('msTenantForm');
+    AOS_API.admin.msTenantSettings.get().then(s => {
+      if (!s) return;
+      form.tenantId.value = s.tenantId || '';
+      form.clientId.value = s.clientId || '';
+      form.redirectUri.value = s.redirectUri || '';
+    }).catch(() => {});
+  }
+  function saveMsTenantSettings() {
+    const form = document.getElementById('msTenantForm');
+    const payload = { tenantId: form.tenantId.value, clientId: form.clientId.value, redirectUri: form.redirectUri.value };
+    AOS_API.admin.msTenantSettings.update(payload).then(() => alert('Microsoft tenant settings saved.')).catch(err => alert(err.message));
+  }
+
+  /* =========================================================
+     RECENT ACTIVITY / NOTIFICATIONS / COMMAND PALETTE
+  ========================================================= */
+  // BACKEND: an activity-feed endpoint, or reuse AOS_API.notifications.list()
+  function renderRecentActivity() {
+    const container = document.getElementById('recentActivityList');
+    loadInto(
+      container,
+      () => AOS_API.notifications.list(),
+      (list) => {
+        container.innerHTML = list.map(n => (
+          '<div class="clickable-row" data-action="openProject" data-arg="' + (n.projectId || '') + '" style="padding:8px; font-size:13px; border-top:1px solid var(--border);">' +
+            '<b>' + n.actor + '</b> <span class="subtle">' + n.text + '</span>' +
+          '</div>'
+        )).join('');
+      },
+      { loadingLabel: 'Loading activity…', emptyLabel: 'No recent activity' }
+    );
+  }
+
+  // BACKEND: AOS_API.notifications.list() → GET /api/notifications
+  function renderNotifications() {
+    const container = document.getElementById('notifList');
+    loadInto(
+      container,
+      () => AOS_API.notifications.list(),
+      (list) => {
+        container.innerHTML = list.map(n => (
+          '<div class="notif-item" data-notification-id="' + n.id + '"><b>' + n.actor + '</b> ' + n.text +
+          '<div class="subtle" style="font-size:11px; margin-top:2px;">' + (n.relativeTime || '') + '</div></div>'
+        )).join('');
+      },
+      { loadingLabel: 'Loading…', emptyLabel: 'You\'re all caught up' }
+    );
+  }
+  function markAllNotificationsRead() {
+    AOS_API.notifications.markAllRead().then(renderNotifications).catch(() => {});
+  }
+
+  // BACKEND: AOS_API.search.query(q) → GET /api/search?q=
+  let paletteDebounce = null;
+  function handlePaletteInput(value) {
+    clearTimeout(paletteDebounce);
+    const results = document.getElementById('paletteResults');
+    if (!value || !value.trim()) { results.innerHTML = ''; return; }
+    paletteDebounce = setTimeout(() => {
+      loadInto(
+        results,
+        () => AOS_API.search.query(value.trim()),
+        (list) => {
+          results.innerHTML = list.map(r => (
+            '<div class="palette-item" data-action="' + (r.type === 'project' ? 'openProject' : 'openTaskFromList') + '" data-arg="' + r.id + '">' + r.label + ' <span class="subtle">' + (r.context || '') + '</span></div>'
+          )).join('');
+        },
+        { loadingLabel: 'Searching…', emptyLabel: 'No results' }
+      );
+    }, 250);
+  }
+
+  /* =========================================================
+     GLOBAL EVENT DELEGATION
+     Every element carrying data-action / data-change-action /
+     data-input-action is wired here instead of using inline
+     onclick="" handlers. Handlers read their arguments from
+     data-arg / data-arg2 so dynamically-rendered rows (projects,
+     tasks, members, admin records, …) work exactly like static
+     elements — nothing needs a per-element addEventListener.
+  ========================================================= */
+  const ACTIONS = {
+    openModal: (el) => openModal(el.dataset.arg),
+    closeModal: (el) => closeModal(el.dataset.arg),
+    navScreen: (el) => navScreen(el.dataset.screen || el.dataset.arg),
+    openProject: (el) => openProject(el.dataset.arg),
+    openCategory: (el) => openCategory(el.dataset.arg),
+    openProjectFromHealthModal: (el) => openProjectFromHealthModal(el.dataset.arg),
+    openHealthModal: (el) => openHealthModal(el.dataset.arg),
+    openTaskFromList: (el) => openTaskFromList(el.dataset.taskId || el.dataset.arg),
+    openTaskDetail: (el) => openTaskDetail(el.dataset.taskId || el.dataset.arg),
+    setHomeTaskRange: (el) => setHomeTaskRange(el.dataset.arg),
+    toggleFilterPanel: (el, ev) => toggleFilterPanel(ev),
+    stopPropagation: (el, ev) => ev.stopPropagation(),
+    toggleCatSort: (el) => toggleCatSort(el.dataset.arg),
+    clearCatFilters: () => clearCatFilters(),
+    backFromProjectDetail: () => backFromProjectDetail(),
+    openEditProject: () => openEditProject(),
+    saveAndSyncProject: () => saveAndSyncProject(),
+    saveEditProject: () => saveEditProject(),
+    submitComment: () => submitComment(),
+    decideApproval: (el) => decideApproval(el.dataset.arg, el.dataset.arg2),
+    setDirectorySort: (el) => setDirectorySort(el.dataset.arg),
+    openDeptModal: (el) => openDeptModal(el.dataset.arg),
+    openWorkloadDept: (el) => openWorkloadDept(el.dataset.arg),
+    addMember: (el) => addMember(el.dataset.arg),
+    removeMember: (el) => removeMember(el.dataset.arg, el.dataset.arg2),
+    startGraphImport: () => startGraphImport(),
+    sendInviteViaOutlook: () => sendInviteViaOutlook(),
+    addInvitedMember: () => addInvitedMember(),
+    markAllNotificationsRead: () => markAllNotificationsRead(),
+    goToTrail: (el) => goToTrail(parseInt(el.dataset.arg, 10)),
+    goBack: () => goBack(),
+    openAdminCreateForm: (el) => openAdminCreateForm(el.dataset.arg),
+    openAdminEditForm: (el) => openAdminEditForm(el.dataset.arg, el.dataset.arg2),
+    deleteAdminRecord: (el) => deleteAdminRecord(el.dataset.arg, el.dataset.arg2),
+    submitAdminForm: () => submitAdminForm(),
+    saveOrgSettings: () => saveOrgSettings(),
+    saveMsTenantSettings: () => saveMsTenantSettings()
+  };
+  const CHANGE_ACTIONS = {
+    setCatBrandPocFilter: (el) => setCatBrandPocFilter(el.value),
+    setCat22ftPocFilter: (el) => setCat22ftPocFilter(el.value),
+    setFinanceStatus: (el) => setFinanceStatus(el.dataset.arg, el.dataset.arg2, el.value),
+    handleContactFileSelect: (el) => handleContactFileSelect(el)
+  };
+  const INPUT_ACTIONS = {
+    updateProgressLabel: (el) => { document.getElementById('epProgressVal').textContent = el.value + '%'; },
+    handlePaletteInput: (el) => handlePaletteInput(el.value)
+  };
+
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const fn = ACTIONS[el.dataset.action];
+    if (!fn) return;
+    if (el.dataset.action === 'stopPropagation') { e.stopPropagation(); return; }
+    e.stopPropagation();
+    fn(el, e);
+  });
+  document.addEventListener('change', (e) => {
+    const el = e.target.closest('[data-change-action]');
+    if (!el) return;
+    const fn = CHANGE_ACTIONS[el.dataset.changeAction];
+    if (fn) fn(el);
+  });
+  document.addEventListener('input', (e) => {
+    const el = e.target.closest('[data-input-action]');
+    if (!el) return;
+    const fn = INPUT_ACTIONS[el.dataset.inputAction];
+    if (fn) fn(el);
+  });
+
+  /* =========================================================
+     INIT
+     Bootstraps every screen's data from AOS_API. Each loader owns
+     the loading/empty/error lifecycle for the containers it fills.
+  ========================================================= */
+  async function loadProjectsData() {
+    const grid = document.getElementById('homeKpiGrid');
+    renderLoading(grid, 'Loading projects…');
+    try {
+      PROJECTS = (await AOS_API.projects.list()) || [];
+      PROJECTS.forEach(p => { financeState[p.id] = financeState[p.id] || { 'SOW':'Initiated', 'Estimate Request':'Initiated', 'JCR':'Initiated' }; });
+      renderHomeKpis();
+      renderUpcomingGoLives();
+      renderCatHub();
+      renderArchives('all');
+      renderFinance();
+    } catch (err) {
+      renderError(grid, err, loadProjectsData);
+    }
+  }
+
+  async function loadMembersData() {
+    const grid = document.getElementById('bentoGrid');
+    if (grid) renderLoading(grid, 'Loading teams…');
+    try {
+      const teams = (await AOS_API.members.listTeams()) || [];
+      const directory = (await AOS_API.members.listDirectory()) || [];
+      departments = {};
+      teams.forEach(t => { departments[t.name] = (t.members || []).map(m => m.name || m); });
+      MEMBER_DIRECTORY = {};
+      directory.forEach(m => { MEMBER_DIRECTORY[m.name] = { position: m.position, email: m.email, phone: m.phone }; });
+      renderBento();
+      renderDirectory();
+      populateInviteDeptOptions();
+    } catch (err) {
+      if (grid) renderError(grid, err, loadMembersData);
+    }
+  }
+
+  async function loadReportsData() {
+    try {
+      workload = (await AOS_API.reports.getWorkOwnership()) || {};
+      renderWorkloadDeptList();
+      renderOrgWorkOwnership();
+      renderHealthDonut();
+    } catch (err) {
+      const legend = document.getElementById('ownershipLegend');
+      if (legend) renderError(legend, err, loadReportsData);
+    }
+  }
+
+  navTo([crumbScreen('dashboard')]);
+  updateAdminNavVisibility();
+  renderHomeTasks();
+  renderRecentActivity();
+  renderNotifications();
+  loadProjectsData();
+  loadMembersData();
+  loadReportsData();
+</script>
+</body>
+</html>
